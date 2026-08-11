@@ -1,0 +1,14 @@
+{
+  "name": "marafiq-ai-reviewer",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node api/webhook.mjs"
+  },
+  "dependencies": {
+    "@octokit/auth-app": "^7.1.0",
+    "@octokit/rest": "^20.1.0",
+    "@google/generative-ai": "^0.24.0"
+  }
+}
