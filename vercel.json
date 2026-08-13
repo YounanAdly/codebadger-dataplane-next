@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/webhook",
+      "destination": "/api/webhook"
+    }
+  ],
+  "security": {
+    "auth": {
+      "excludePaths": ["/api/webhook"]
+    }
+  }
+}
