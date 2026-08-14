@@ -3,14 +3,18 @@ import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
-import { createAppAuth } from "@octokit/auth-app";
 import { scanDiff } from "@/lib/reviewer-core/rules-scanner";
 import { reportRun } from "@/lib/control-plane";
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
-const APP_ID = process.env.APP_ID || "";
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+
+// Customer repos are accessed with the project owner's OAuth token (no GitHub App installation).
+function makeOctokit() {
+  if (!GITHUB_TOKEN) throw new Error("GITHUB_TOKEN is not set");
+  return new Octokit({ auth: GITHUB_TOKEN });
+}
 
 function getEnabledBranches() {
   const env = process.env.ENABLED_BRANCHES || "main,development";
@@ -387,20 +391,13 @@ export async function POST(req: NextRequest) {
 
   // ── Pull Request Event ──
   if (event === "pull_request") {
-    const { action, pull_request, repository, installation } = payload;
+    const { action, pull_request, repository } = payload;
     if (!["opened", "synchronize", "reopened"].includes(action)) {
       return NextResponse.json({ message: "Action ignored" });
     }
 
     try {
-      const octokit = new Octokit({
-        authStrategy: createAppAuth,
-        auth: {
-          appId: APP_ID,
-          privateKey: PRIVATE_KEY.replace(/\\n/g, "\n"),
-          installationId: installation.id,
-        },
-      });
+      const octokit = makeOctokit();
       const owner = repository.owner.login;
       const repo = repository.name;
       const prNumber = pull_request.number;
@@ -464,7 +461,7 @@ export async function POST(req: NextRequest) {
 
   // ── Push Event ──
   if (event === "push") {
-    const { ref, after: headSha, repository, installation } = payload;
+    const { ref, after: headSha, repository } = payload;
     const branchName = ref.replace("refs/heads/", "");
 
     if (!isBranchEnabled(branchName)) {
@@ -477,14 +474,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const octokit = new Octokit({
-        authStrategy: createAppAuth,
-        auth: {
-          appId: APP_ID,
-          privateKey: PRIVATE_KEY.replace(/\\n/g, "\n"),
-          installationId: installation.id,
-        },
-      });
+      const octokit = makeOctokit();
       const owner = repository.owner.login;
       const repo = repository.name;
 
