@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { scanDiff } from "@/lib/reviewer-core/rules-scanner";
+import { reportRun } from "@/lib/control-plane";
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 const APP_ID = process.env.APP_ID || "";
@@ -23,11 +24,21 @@ function isBranchEnabled(branch: string) {
   return getEnabledBranches().includes(branch);
 }
 
+/**
+ * فشل مغلق (fail-closed): في الإنتاج يجب أن يكون WEBHOOK_SECRET مضبوطاً —
+ * وإلا فالطلب مرفوض. (في التطوير المحلي نسمح بالتجربة بدون سر.)
+ */
+function isAuthConfigured() {
+  return process.env.NODE_ENV !== "production" || !!WEBHOOK_SECRET;
+}
+
 function verifySignature(rawBody: string, signature: string) {
-  if (!WEBHOOK_SECRET) return true; // If secret not set, skip verification
+  if (!WEBHOOK_SECRET) return process.env.NODE_ENV !== "production";
   const hmac = crypto.createHmac("sha256", WEBHOOK_SECRET);
   const digest = `sha256=${hmac.update(rawBody).digest("hex")}`;
-  return signature === digest;
+  const a = Buffer.from(digest);
+  const b = Buffer.from(signature);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 function loadRules() {
@@ -356,7 +367,11 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get("x-hub-signature-256") || "";
 
-  if (WEBHOOK_SECRET && !verifySignature(rawBody, signature)) {
+  if (!isAuthConfigured()) {
+    console.error("[webhook] rejected: WEBHOOK_SECRET is not configured (production is fail-closed)");
+    return NextResponse.json({ message: "Webhook authentication not configured" }, { status: 401 });
+  }
+  if (!verifySignature(rawBody, signature)) {
     return NextResponse.json({ message: "Invalid signature" }, { status: 401 });
   }
 
@@ -368,6 +383,7 @@ export async function POST(req: NextRequest) {
   }
 
   const event = req.headers.get("x-github-event");
+  const startedAt = Date.now();
 
   // ── Pull Request Event ──
   if (event === "pull_request") {
@@ -418,6 +434,15 @@ export async function POST(req: NextRequest) {
         result.comments
       );
 
+      await reportRun({
+        eventType: `pull_request.${action}`,
+        prNumber,
+        verdict: result.verdict,
+        findings: result.allFindings.length,
+        durationMs: Date.now() - startedAt,
+        status: "success",
+      });
+
       return NextResponse.json({
         message: "Review posted",
         scanner: result.scannerFindings.length,
@@ -426,6 +451,13 @@ export async function POST(req: NextRequest) {
       });
     } catch (err: any) {
       console.error("[reviewer] fatal:", err);
+      await reportRun({
+        eventType: `pull_request.${action}`,
+        prNumber: payload.pull_request?.number ?? null,
+        durationMs: Date.now() - startedAt,
+        status: "failed",
+        errorMsg: String(err.message || err).slice(0, 2000),
+      });
       return NextResponse.json({ message: err.message }, { status: 500 });
     }
   }
@@ -436,6 +468,11 @@ export async function POST(req: NextRequest) {
     const branchName = ref.replace("refs/heads/", "");
 
     if (!isBranchEnabled(branchName)) {
+      await reportRun({
+        eventType: "push",
+        status: "skipped",
+        errorMsg: `Branch ${branchName} not enabled`,
+      });
       return NextResponse.json({ message: `Branch ${branchName} not enabled` });
     }
 
@@ -517,6 +554,14 @@ export async function POST(req: NextRequest) {
               .join("\n\n") || "No findings.",
         });
 
+        await reportRun({
+          eventType: "push",
+          verdict: result.verdict,
+          findings: result.allFindings.length,
+          durationMs: Date.now() - startedAt,
+          status: "success",
+        });
+
         return NextResponse.json({
           message: "Commit reviewed",
           findings: result.allFindings.length,
@@ -532,6 +577,12 @@ export async function POST(req: NextRequest) {
       }
     } catch (err: any) {
       console.error("[push] fatal:", err);
+      await reportRun({
+        eventType: "push",
+        durationMs: Date.now() - startedAt,
+        status: "failed",
+        errorMsg: String(err.message || err).slice(0, 2000),
+      });
       return NextResponse.json({ message: err.message }, { status: 500 });
     }
   }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { scanDiff } from "@/lib/reviewer-core/rules-scanner";
+import { reportRun } from "@/lib/control-plane";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const AZURE_DEVOPS_PAT = process.env.AZURE_DEVOPS_PAT || "";
@@ -380,10 +382,22 @@ async function setPrStatus(project: string, repoId: string, prId: string, { stat
 }
 
 export async function POST(req: NextRequest) {
+  /**
+   * فشل مغلق (fail-closed): في الإنتاج يجب ضبط AZURE_WEBHOOK_USER/PASS.
+   */
+  if (process.env.NODE_ENV === "production" && (!AZURE_WEBHOOK_USER || !AZURE_WEBHOOK_PASS)) {
+    console.error("[azure-webhook] rejected: basic auth credentials not configured (production is fail-closed)");
+    return NextResponse.json({ error: "Webhook authentication not configured" }, { status: 401 });
+  }
+
   if (AZURE_WEBHOOK_USER && AZURE_WEBHOOK_PASS) {
     const auth = req.headers.get("authorization") || "";
     const expected = "Basic " + Buffer.from(`${AZURE_WEBHOOK_USER}:${AZURE_WEBHOOK_PASS}`).toString("base64");
-    if (auth !== expected) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const a = Buffer.from(auth);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
   }
 
   let payload: any;
@@ -408,6 +422,7 @@ export async function POST(req: NextRequest) {
   const title = resource.title || "(no title)";
   const description = resource.description || "";
   const author = resource.createdBy?.displayName || resource.createdBy?.uniqueName || "unknown";
+  const startedAt = Date.now();
 
   if (!project || !repoId || !prId) {
     return NextResponse.json({ error: "malformed webhook — missing project/repoId/prId" }, { status: 400 });
@@ -577,9 +592,25 @@ export async function POST(req: NextRequest) {
           : "✅ AI Review passed",
     });
 
+    await reportRun({
+      eventType,
+      prNumber: parseInt(prId, 10) || undefined,
+      verdict,
+      findings: allFindings.length,
+      durationMs: Date.now() - startedAt,
+      status: "success",
+    });
+
     return NextResponse.json({ ok: true, prId, findings: allFindings.length, verdict });
   } catch (err: any) {
     console.error("[azure-webhook] fatal:", err);
+    await reportRun({
+      eventType: eventType || "unknown",
+      prNumber: payload.resource?.pullRequestId ? parseInt(payload.resource.pullRequestId, 10) : undefined,
+      durationMs: Date.now() - (startedAt ?? Date.now()),
+      status: "failed",
+      errorMsg: String(err.message || err).slice(0, 2000),
+    });
     try {
       await setPrStatus(project, repoId, prId, {
         state: "failed",
