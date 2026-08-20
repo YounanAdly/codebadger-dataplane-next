@@ -68,8 +68,8 @@ When implementing a new Figma design, always read this file first and reuse exis
   - `.reveal-fade`, `.reveal-fade-up`, `.reveal-fade-in-x` — initial hidden states consumed by `[appScrollReveal]`. The directive adds `.is-visible` when the element enters the viewport. RTL-safe (logical translate). Respects `prefers-reduced-motion`.
   - `::view-transition-old(root)` / `::view-transition-new(root)` — native browser cross-fade for route transitions (Angular `withViewTransitions()`). Unsupported browsers degrade gracefully (no animation, no JS cost).
   - Global cursor baseline: `button:not(:disabled)` → `cursor: pointer`, `button:disabled` → `cursor: not-allowed`.
-- `src/styles/themes/_light-theme.scss`, `_dark-theme.scss`, `_green-theme.scss`: CSS variable theme classes.
-- `src/assets/i18n/en.json`, `src/assets/i18n/ar.json`: translation catalogs.
+- `src/styles/themes/` (`_light-theme.scss`, `_dark-theme.scss`, `_green-theme.scss`, etc.): CSS variable theme classes & token definitions. (Raw hex/rgb values in theme files are exempt from hardcoded color rules).
+- `src/assets/i18n/en.json`, `src/assets/i18n/ar.json`: Translation catalogs. (Adding new keys with matching parity between en and ar is supported and expected; string literals inside i18n JSON files are exempt from hardcoded string rules).
 
 ---
 
@@ -318,7 +318,7 @@ This project targets **Angular 22**. New components, services, and directives mu
 | `--color-service-process-gradient-mid` | `rgba(116, 193, 219, 0.185)` | Service process gradient middle (Figma stop 37% with 50% layer opacity applied) |
 | `--color-service-process-gradient-end` | `rgba(0, 140, 152, 0.5)` | Service process gradient end (Figma stop 100% with 50% layer opacity applied) |
 
-> **Rule**: Never hardcode these hex values in component SCSS. Always reference via `var(--color-*)`.  
+> **Rule**: Never hardcode hex/rgb values in component SCSS (`*.component.scss`). Always reference via `var(--color-*)`. Theme files in `src/styles/themes/` are exempt as they define the tokens.  
 > `--color-modal-bg` and `--color-modal-input-bg` are intentionally `#ffffff` in all themes because the modal card is always rendered as a white surface (dark-theme only darkens the page background behind it).
 
 ---

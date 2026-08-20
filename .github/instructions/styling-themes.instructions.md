@@ -25,16 +25,16 @@ background: #ebf6f7;
 
 ## Theme Source Files (Exempt from the Hardcoded-Color Rule)
 
-The three theme files above are the **source of truth** for every design token — they DEFINE what `var(--color-*)`, `var(--radius-*)`, `var(--transition-*)`, and `var(--skeleton-*)` mean per theme. Every other SCSS file consumes those tokens.
+All theme files, token definitions, and stylesheets in `src/styles/themes/` (such as `_light-theme.scss`, `_dark-theme.scss`, `_green-theme.scss`, or any dark/light theme folder/file), as well as `_variables.scss` and `_tokens.scss`, are the **source of truth** for design tokens — they DEFINE what `var(--color-*)`, `var(--radius-*)`, `var(--transition-*)`, and `var(--skeleton-*)` mean per theme.
 
-**Raw hex / rgb / rgba / named color values inside those three files are correct by design and MUST NOT be flagged as "hardcoded color" violations by any reviewer (human or AI).**
+**Raw hex / rgb / rgba / named color values inside ANY theme definition file or theme folder are correct by design and MUST NOT be flagged as "hardcoded color" violations by any reviewer (human or AI).**
 
-- Editing a value in a token declaration (e.g. `--color-teal: #008c98;` → `#0a99a6;`) is the ONLY way to change a color across the app. That's the intended workflow, not a rule violation.
-- Adding a new token requires a matching declaration in **all three** files. Missing the sibling declaration IS a valid finding.
+- Editing or declaring colors in token declarations (e.g. `--color-teal: #008c98;` → `#0a99a6;` or dark/light palette values) in any theme stylesheet is the intended workflow, NOT a rule violation.
+- Adding a new token to theme palettes requires matching declarations across the active themes.
 - Renaming or removing a token is a breaking change — flag it and check every consumer.
 - Wrong per-theme value (e.g. a dark-theme color that fails WCAG contrast) is still a valid finding.
 
-The "no hardcoded colors" rule applies to **every other SCSS file** under `src/**/*.scss` — component styles, layout styles, and `global.theme.scss`. In those files, colors must come from `var(--color-*)`.
+The "no hardcoded colors" rule strictly applies to **component stylesheets** (`src/app/**/*.component.scss`, `src/app/**/*.scss`) and page styles. In those component files, colors must come from `var(--color-*)`.
 
 ## Token Catalog
 

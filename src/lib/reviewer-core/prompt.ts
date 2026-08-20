@@ -59,7 +59,7 @@ export const REVIEW_JSON_SCHEMA = {
 };
 
 const SEVERITY_GUIDE = `
-- **critical**: security holes (XSS/SSRF/secrets/injection), hardcoded credentials, broken auth, direct HttpClient in components, hardcoded user-facing strings, hardcoded design values (hex/rgb/rgba/px colors in SCSS), missing i18n key parity between en.json & ar.json, use of forbidden APIs (@Input/@Output decorators, *ngIf/*ngFor, NgModules, constructor DI in NEW code), eager route components, unsafe DOM access without isPlatformBrowser guard, .subscribe() without takeUntilDestroyed, unhandled HTTP errors that bypass errorInterceptor, alert()/console.error() for user-facing failures.
+- **critical**: security holes (XSS/SSRF/secrets/injection), hardcoded credentials, broken auth, direct HttpClient in components, hardcoded user-facing strings in templates/components (outside i18n catalogs), hardcoded design values (hex/rgb/rgba/px colors in component SCSS outside theme definitions), missing i18n key parity between en.json & ar.json (key in one but missing in the other), use of forbidden APIs (@Input/@Output decorators, *ngIf/*ngFor, NgModules, constructor DI in NEW code), eager route components, unsafe DOM access without isPlatformBrowser guard, .subscribe() without takeUntilDestroyed, unhandled HTTP errors that bypass errorInterceptor, alert()/console.error() for user-facing failures.
 - **high**: missing OnPush on new components, missing @defer for heavy sections, missing aria-label on icon-only buttons, missing NgOptimizedImage on raster heroes, race-condition-prone Observable patterns, missing timeout/retry per api-calls.instructions.md, missing endLine in @for track, direct MessageService injection instead of ToastService.
 - **medium**: naming/style violations, missing test spec for new component/service, minor a11y improvements (labels/roles), missing translation namespace grouping, inline Formly field arrays instead of form.json, endpoint URLs inlined instead of constants.ts.
 - **low**: readability/microopts, minor RTL concerns, minor SCSS duplication.
@@ -72,23 +72,31 @@ const CRITICAL_EXAMPLES = `
 If ANY of these patterns appears on an added/modified line, you must flag it as critical.
 Do not downgrade to high/medium. Do not skip because "it's just one line".
 
-### SCSS color-token exemption (read this BEFORE flagging any color)
+### 🎨 SCSS & Theme Color Exemptions (Read BEFORE flagging any color)
 
-The following three files are the **source of truth** for every design token (\`--color-*\`, \`--radius-*\`, \`--transition-*\`, \`--skeleton-*\`). Their entire job is to hold raw hex / rgb / rgba / named color values so the rest of the app can consume them via \`var(--color-*)\`:
+Theme and design token files are the **source of truth** for colors and design tokens. Their entire purpose is to define raw hex, rgb, rgba, and named colors so the rest of the application can reference them via \`var(--color-*)\`:
 
-- \`src/styles/themes/_light-theme.scss\`
-- \`src/styles/themes/_dark-theme.scss\`
-- \`src/styles/themes/_green-theme.scss\`
+- **Exempt Files**: ANY theme or token definition file in \`src/styles/themes/**/*.scss\`, \`src/styles/**/*theme*.scss\`, \`**/_variables*.scss\`, \`**/_tokens*.scss\`, or any stylesheet defining CSS variables (such as \`_light-theme.scss\`, \`_dark-theme.scss\`, \`_green-theme.scss\`, custom dark/light theme folders).
+- **Allowed**: Raw hex / rgb / rgba / color names inside ANY theme file or token definition are **expected and valid**. Editing or creating theme colors in theme files is NOT a rule violation.
+- **Where the rule applies**: Only flag hardcoded colors when they appear in **component stylesheets** (\`*.component.scss\`) or non-theme stylesheets where \`var(--color-*)\` should have been used instead.
+- Also allowed: The \`<meta name="theme-color">\` tags in \`src/index.html\` (which cannot use CSS variables).
 
-**Never flag a raw hex / rgb / rgba / named color as a "hardcoded color" violation when the diff is inside one of those three files.** Editing a token value there (e.g. \`--color-teal: #008c98;\` → \`#0a99a6;\`) is the intended workflow, NOT a rule break. In those files, only flag real problems: a new token added without matching declarations in the other two theme files, a typo in a variable name, a token used before it is declared, or an accessibility/contrast regression.
+### 🌐 i18n & Localization Rules (Read BEFORE flagging strings or keys)
 
-Also: the \`<meta name="theme-color">\` tags in \`src/index.html\` are explicitly allowed to contain \`#008c98\` and \`#001a3f\` per \`rules.md §1.7\` — do not flag them either.
+1. **Translation Catalogs (\`src/assets/i18n/*.json\`, \`**/i18n/*.json\`)**:
+   - JSON localization files contain translated text strings by definition. **NEVER** flag strings inside translation JSON files as "hardcoded strings".
+2. **Adding NEW Translation Keys is Fully Supported & Encouraged**:
+   - Developers can create and add new translation keys at any time.
+   - Any keys listed in \`rules.md\` or instructions documents are **examples / pre-seeded keys only**, NOT an exhaustive closed catalog.
+   - **NEVER** flag a newly added translation key as "missing from localization" or "not in rules.md" if it is present in the PR's translation files or follows valid key structure.
+   - **The only rule for i18n keys is PARITY**: When a key is added to \`en.json\`, it must also exist in \`ar.json\` (and vice versa) with the same nested structure.
+3. **Non-User-Facing Strings**:
+   - Route path strings (e.g. \`'login'\`), HTML element types, CSS class names, config identifiers, and test fixtures are NOT user-facing text and must NOT be flagged.
 
 | Pattern (on the new/right side) | Rule broken |
 |---|---|
-| Hex color in an \`.scss\` file **outside the three theme source files above** — e.g. \`color: #fff;\`, \`background: #123456;\`, \`border: 1px solid #333;\` | styling-themes.instructions.md — use \`var(--color-*)\` |
-| \`rgb(\` or \`rgba(\` in an \`.scss\` file **outside the three theme source files above** | styling-themes.instructions.md — use \`var(--color-*)\` |
-| Any raw color name in SCSS **outside the three theme source files** other than \`transparent\`, \`inherit\`, \`currentColor\`, \`initial\`, \`unset\` — e.g. \`color: white;\`, \`background: black;\`, \`color: red;\` | styling-themes.instructions.md |
+| Hex / rgb / rgba color in a **component \`.scss\` file** outside theme definition files | styling-themes.instructions.md — use \`var(--color-*)\` |
+| Any raw color name in component SCSS other than \`transparent\`, \`inherit\`, \`currentColor\`, \`initial\`, \`unset\` | styling-themes.instructions.md — use \`var(--color-*)\` |
 | \`@Input()\` / \`@Output()\` / \`@ViewChild()\` / \`@ViewChildren()\` decorator in a \`.ts\` file | rules.md §1.5 — use \`input()\` / \`output()\` / \`viewChild()\` |
 | \`@NgModule(\` | rules.md §1.5 — project is standalone-only |
 | \`*ngIf\`, \`*ngFor\`, \`*ngSwitch\` in a template | rules.md §1.5 — use \`@if\` / \`@for\` / \`@switch\` |
@@ -97,10 +105,10 @@ Also: the \`<meta name="theme-color">\` tags in \`src/index.html\` are explicitl
 | \`console.error(\` or \`alert(\` for a user-facing failure | error-handling.instructions.md — use \`ToastService\` |
 | A component's \`.ts\` file with \`.subscribe(\` but no \`takeUntilDestroyed(\` on the same statement/chain | rules.md §1.5 — memory leak |
 | Any string literal like \`'/api/...'\` inline in a component or service (not from \`constants.ts\`) | copilot-instructions.md §7 |
-| Any hardcoded user-visible English/Arabic string in a template that is NOT wrapped in \`{{ '...' | translate }}\` (short labels, buttons, titles) | i18n.instructions.md |
+| Hardcoded user-visible text in an HTML template (outside \`i18n/*.json\`) NOT wrapped in \`{{ '...' | translate }}\` | i18n.instructions.md |
+| A translation key added to \`en.json\` but missing from \`ar.json\` (or vice versa) — i.e. broken parity | i18n.instructions.md §2 |
 | A new \`@Component({...})\` block without \`changeDetection: ChangeDetectionStrategy.OnPush\` | performance rule |
 | Access to \`window\` / \`document\` / \`localStorage\` / \`sessionStorage\` / \`matchMedia\` / \`IntersectionObserver\` in a component without an \`isPlatformBrowser(inject(PLATFORM_ID))\` guard | SSR rule §11 |
-| A translation key added to \`en.json\` but not \`ar.json\` (or vice versa) | i18n.instructions.md §3 |
 | \`try { ... } catch\` around an HTTP call in a component | error-handling.instructions.md §1 |
 | A route with \`component:\` instead of \`loadComponent: () => import(...)\` | copilot-instructions.md §9 |
 | Constructor parameter DI in NEW code — e.g. \`constructor(private foo: Foo) {}\` | rules.md §1.5 — use \`inject(Foo)\` |

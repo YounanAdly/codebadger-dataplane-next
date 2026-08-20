@@ -376,6 +376,8 @@ const MODULE_MAP = {
 const ALWAYS_ALLOWED_PATTERNS = [
   /^\.github\//,
   /^\.ai-review\//,
+  /src\/assets\/i18n\//,
+  /src\/styles\/themes\//,
   /package\.json/,
   /package-lock\.json/,
   /yarn\.lock/,
