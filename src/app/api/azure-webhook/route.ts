@@ -4,6 +4,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
 import { reportRun } from "@/lib/control-plane";
+import {
+  COMPANY_NAME,
+  BOT_NAME,
+  BOT_ROLE,
+  CODEBADGER_LOGO_URL,
+  SUMMARY_MARKER,
+  LEGACY_SUMMARY_MARKER,
+} from "@/lib/branding";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const AZURE_DEVOPS_PAT = process.env.AZURE_DEVOPS_PAT || "";
@@ -26,7 +34,7 @@ function loadRules() {
 }
 
 async function runAIReview(rules: string, diff: string, pr: any) {
-  const systemPrompt = `You are **Marafiq Reviewer**, a senior Angular 22 code-review agent.
+  const systemPrompt = `You are **CodeBadger Reviewer**, a senior Angular 22 code-review agent for ${COMPANY_NAME}.
 Your ONLY job: read the PR diff and enforce the project's rulebook with surgical precision.
 You are strict, aggressive, and specific. Never say "looks good" without justification.
 
@@ -119,7 +127,7 @@ function renderComment(f: any) {
   if (f.suggestion) {
     parts.push(``, `**Suggested fix:**`, "```suggestion", f.suggestion, "```");
   }
-  parts.push(``, `---`, `<sub>🤖 Marafiq AI Reviewer</sub>`);
+  parts.push(``, `---`, `<sub>🦡 ${BOT_ROLE} — ${COMPANY_NAME}</sub>`);
   return parts.join("\n");
 }
 
@@ -314,7 +322,7 @@ function branchNameHelp(branch: string) {
     ``,
     `Please rename your branch and re-open the PR.`,
     ``,
-    `🤖 _Marafiq AI Review — branch policy_`,
+    `🦡 _${BOT_NAME} — branch policy_`,
   ].join("\n");
 }
 
@@ -364,7 +372,7 @@ function offScopeWarning(branch: string, offScope: string[]) {
     ``,
     `If these changes are intentional, ignore this warning. Otherwise, move them to their own branch.`,
     ``,
-    `🤖 _Marafiq AI Review — scope policy_`,
+    `🦡 _${BOT_NAME} — scope policy_`,
   ].join("\n");
 }
 
@@ -372,7 +380,7 @@ async function setPrStatus(project: string, repoId: string, prId: string, { stat
   const body: any = {
     state,
     description,
-    context: { name: "marafiq-ai-review", genre: "continuous-integration" },
+    context: { name: "codebadger-ai-review", genre: "continuous-integration" },
   };
   if (iterationId) body.iterationId = iterationId;
   return ado(`${repoUrl(project, repoId)}/pullRequests/${prId}/statuses?api-version=${API_VERSION}`, {
@@ -447,7 +455,7 @@ export async function POST(req: NextRequest) {
   try {
     await setPrStatus(project, repoId, prId, {
       state: "pending",
-      description: "🤖 Marafiq AI Review — running…",
+      description: `🦡 ${BOT_NAME} — running…`,
     });
 
     if (eventType === "git.pullrequest.created") {
@@ -551,7 +559,7 @@ export async function POST(req: NextRequest) {
     } as Record<string, string>)[verdict];
 
     const summaryLines = [
-      `# 🤖 Marafiq AI Review`,
+      `# <img src="${CODEBADGER_LOGO_URL}" width="32" height="32" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
       ``,
       verdictBanner,
       ``,
@@ -577,7 +585,7 @@ export async function POST(req: NextRequest) {
       aiResult.summary || "_(no additional summary)_",
       ``,
       `---`,
-      `<sub>Reviewed against private rulebook · AI: Gemini · Scanner findings: ${scannerFindings.length} · AI findings: ${aiResult.findings?.length || 0}</sub>`
+      `<sub>Reviewed by **${COMPANY_NAME}** against private rulebook · AI: Gemini · Scanner findings: ${scannerFindings.length} · AI findings: ${aiResult.findings?.length || 0}</sub>`
     );
 
     const summaryMd = summaryLines.join("\n");

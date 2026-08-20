@@ -1,6 +1,7 @@
 // GitHub Actions platform adapter.
 
 import { readFile } from 'node:fs/promises';
+import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from '@/lib/branding';
 
 const API = 'https://api.github.com';
 
@@ -24,7 +25,7 @@ export class GitHubPlatform {
         accept: 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28',
         authorization: `Bearer ${this.token}`,
-        'user-agent': 'marafiq-ai-review',
+        'user-agent': 'codebadger-ai-review',
         ...(init.body ? { 'content-type': 'application/json' } : {}),
         ...(init.headers || {}),
       },
@@ -55,12 +56,15 @@ export class GitHubPlatform {
   }
 
   async postSummary(markdown: string, prNumber: number) {
-    const marker = '<!-- marafiq-ai-review-summary -->';
+    const marker = SUMMARY_MARKER;
     const body = `${marker}\n${markdown}`;
     const existing = await this.#gh(
       `/repos/${this.repo}/issues/${prNumber}/comments?per_page=100`,
     );
-    const mine = (existing || []).find((c: any) => (c.body || '').startsWith(marker));
+    const mine = (existing || []).find((c: any) => {
+      const text = c.body || '';
+      return text.includes(SUMMARY_MARKER) || text.includes(LEGACY_SUMMARY_MARKER);
+    });
     if (mine) {
       await this.#gh(`/repos/${this.repo}/issues/comments/${mine.id}`, {
         method: 'PATCH',
@@ -81,7 +85,7 @@ export class GitHubPlatform {
       try {
         const existing = await this.#listAllReviewComments(prNumber);
         const existingFps = new Set();
-        const fpRe = /<!-- marafiq-ai-review-fp:([^\s>]+) -->/;
+        const fpRe = FINGERPRINT_REGEX;
         for (const c of existing) {
           const m = fpRe.exec(c.body || '');
           if (m) existingFps.add(m[1]);

@@ -1,44 +1,56 @@
-// Azure DevOps platform adapter.
+import {
+  SUMMARY_MARKER,
+  LEGACY_SUMMARY_MARKER,
+  FINGERPRINT_REGEX,
+  CODEBADGER_LOGO_URL,
+  COMPANY_NAME,
+  BOT_NAME,
+} from '@/lib/branding';
 
 const API_VERSION = '7.1-preview.1';
 
 export class AzurePlatform {
   name: string;
-  token: string;
-  collectionUri: string;
+  pat: string;
+  org: string;
   project: string;
-  repoId: string;
+  repo: string;
   prId: string;
+  baseUrl: string;
 
   constructor() {
     this.name = 'azure';
-    this.token = process.env.SYSTEM_ACCESSTOKEN || '';
-    this.collectionUri = (process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI || '').replace(/\/+$/, '');
+    this.pat = process.env.AZURE_DEVOPS_PAT || '';
+    this.org = process.env.AZURE_DEVOPS_ORG || '';
     this.project = process.env.SYSTEM_TEAMPROJECT || '';
-    this.repoId = process.env.BUILD_REPOSITORY_ID || '';
+    this.repo = process.env.BUILD_REPOSITORY_NAME || '';
     this.prId = process.env.SYSTEM_PULLREQUEST_PULLREQUESTID || '';
+    this.baseUrl =
+      process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI ||
+      `https://dev.azure.com/${this.org}`;
 
-    if (!this.token) throw new Error('SYSTEM_ACCESSTOKEN not set.');
-    if (!this.collectionUri) throw new Error('SYSTEM_TEAMFOUNDATIONCOLLECTIONURI not set.');
+    if (!this.pat) throw new Error('AZURE_DEVOPS_PAT not set.');
     if (!this.project) throw new Error('SYSTEM_TEAMPROJECT not set.');
-    if (!this.repoId) throw new Error('BUILD_REPOSITORY_ID not set.');
+    if (!this.repo) throw new Error('BUILD_REPOSITORY_NAME not set.');
     if (!this.prId) throw new Error('SYSTEM_PULLREQUEST_PULLREQUESTID not set.');
   }
 
   async #ado(path: string, init: any = {}) {
-    const url = `${this.collectionUri}/${encodeURIComponent(this.project)}/_apis/git/repositories/${this.repoId}${path}${path.includes('?') ? '&' : '?'}api-version=${API_VERSION}`;
+    const sep = path.includes('?') ? '&' : '?';
+    const url = `${this.baseUrl}${this.project}/_apis/git/repositories/${this.repo}${path}${sep}api-version=${API_VERSION}`;
+    const basic = Buffer.from(`:${this.pat}`).toString('base64');
     const res = await fetch(url, {
       ...init,
       headers: {
         accept: 'application/json',
-        authorization: `Bearer ${this.token}`,
+        authorization: `Basic ${basic}`,
         ...(init.body ? { 'content-type': 'application/json' } : {}),
         ...(init.headers || {}),
       },
     });
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`AzureDevOps ${init.method || 'GET'} ${path} → ${res.status}: ${err.slice(0, 500)}`);
+      throw new Error(`Azure ${init.method || 'GET'} ${path} → ${res.status}: ${err.slice(0, 500)}`);
     }
     if (res.status === 204) return null;
     return res.json();
@@ -57,14 +69,15 @@ export class AzurePlatform {
   }
 
   async postSummary(markdown: string) {
-    const marker = '<!-- marafiq-ai-review-summary -->';
-    const body = `${marker}\n**🤖 Marafiq AI Review**\n\n${markdown}`;
+    const marker = SUMMARY_MARKER;
+    const body = `${marker}\n<img src="${CODEBADGER_LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> **${BOT_NAME}**\n\n${markdown}`;
 
     try {
       const threads = await this.#listAllThreads();
       for (const t of threads) {
         const first = (t.comments || [])[0];
-        if (first && (first.content || '').includes(marker)) {
+        const text = first?.content || '';
+        if (first && (text.includes(SUMMARY_MARKER) || text.includes(LEGACY_SUMMARY_MARKER))) {
           await this.#ado(
             `/pullRequests/${this.prId}/threads/${t.id}/comments/${first.id}`,
             {
@@ -95,7 +108,7 @@ export class AzurePlatform {
       try {
         const threads = await this.#listAllThreads();
         const existingFps = new Set();
-        const fpRe = /<!-- marafiq-ai-review-fp:([^\s>]+) -->/;
+        const fpRe = FINGERPRINT_REGEX;
         for (const t of threads) {
           for (const c of (t.comments || [])) {
             const m = fpRe.exec(c.content || '');

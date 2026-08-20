@@ -1,4 +1,4 @@
-// Marafiq AI Review Core Engine
+// CodeBadger AI Review Core Engine
 
 export { loadConfig, loadRuleCorpus } from './config';
 export { collectDiff } from './diff';

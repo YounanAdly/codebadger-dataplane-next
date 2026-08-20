@@ -5,6 +5,13 @@ import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
 import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
 import { reportRun } from "@/lib/control-plane";
+import {
+  COMPANY_NAME,
+  BOT_NAME,
+  CODEBADGER_LOGO_URL,
+  SUMMARY_MARKER,
+  LEGACY_SUMMARY_MARKER,
+} from "@/lib/branding";
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
@@ -54,7 +61,7 @@ function loadRules() {
 }
 
 async function runAIReview(rules: string, diff: string, pr: any) {
-  const systemPrompt = `You are **Marafiq Reviewer**, a senior Angular 22 code-review agent.
+  const systemPrompt = `You are **CodeBadger Reviewer**, a senior Angular 22 code-review agent for ${COMPANY_NAME}.
 Your ONLY job: read the PR diff and enforce the project's rulebook with surgical precision.
 You are strict, aggressive, and specific. Never say "looks good" without justification.
 
@@ -150,12 +157,12 @@ function renderComment(f: any) {
   ];
   if (f.ruleRef) parts.push("", `📖 _${f.ruleRef}_`);
   if (f.suggestion) parts.push("", "```suggestion", f.suggestion, "```");
-  parts.push("", "🤖 _AI reviewer — Marafiq AI Review_");
+  parts.push("", `🦡 _AI reviewer — ${BOT_NAME}_`);
   return parts.join("\n");
 }
 
 async function postSummary(octokit: any, owner: string, repo: string, prNumber: number, markdown: string) {
-  const marker = "<!-- marafiq-ai-review-summary -->";
+  const marker = SUMMARY_MARKER;
   const body = `${marker}\n${markdown}`;
   const { data: comments } = await octokit.rest.issues.listComments({
     owner,
@@ -163,7 +170,10 @@ async function postSummary(octokit: any, owner: string, repo: string, prNumber: 
     issue_number: prNumber,
     per_page: 100,
   });
-  const mine = comments.find((c: any) => (c.body || "").startsWith(marker));
+  const mine = comments.find((c: any) => {
+    const text = c.body || "";
+    return text.includes(SUMMARY_MARKER) || text.includes(LEGACY_SUMMARY_MARKER);
+  });
   if (mine) {
     await octokit.rest.issues.updateComment({
       owner,
@@ -189,7 +199,7 @@ async function postReview(octokit: any, owner: string, repo: string, prNumber: n
       pull_number: prNumber,
       commit_id: headSha,
       event: "COMMENT",
-      body: "Marafiq AI Review: no inline findings.",
+      body: `${BOT_NAME}: no inline findings.`,
     });
     return;
   }
@@ -237,7 +247,7 @@ async function createCheckRun(
   owner: string,
   repo: string,
   headSha: string,
-  name = "Marafiq AI Review"
+  name = BOT_NAME
 ) {
   const { data } = await octokit.rest.checks.create({
     owner,
@@ -338,7 +348,7 @@ async function executeReview({
       .join(" · ") || "✨ No findings.";
 
   const summaryMd = [
-    `## 🤖 Marafiq AI Review`,
+    `## <img src="${CODEBADGER_LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
     "",
     ({
       approve: "✅ **Approve** — no blocking issues.",
@@ -352,7 +362,7 @@ async function executeReview({
     aiResult.summary || "_(no additional summary)_",
     "",
     "---",
-    `<sub>Reviewed against private rulebook. AI: Gemini. Scanner: ${
+    `<sub>Reviewed by **${COMPANY_NAME}** against private rulebook · AI: Gemini · Scanner: ${
       scannerFindings.length
     } · AI: ${aiResult.findings?.length || 0}</sub>`,
   ].join("\n");
