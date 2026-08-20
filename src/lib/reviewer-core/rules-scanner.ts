@@ -607,6 +607,30 @@ export function suggestPrTitle({ prTitle, files }) {
   return findings;
 }
 
+/**
+ * Parse a raw unified diff (as returned by the GitHub/Azure diff endpoints)
+ * into per-file chunks — the shape scanDiff expects: [{ path, diff }].
+ * Without this, passing the raw string to scanDiff iterates its characters
+ * and `f.diff` is undefined (crash: "reading 'split'").
+ */
+export function parseUnifiedDiffFiles(diff) {
+  if (!diff) return [];
+  const out = [];
+  const parts = diff.split(/(?=^diff --git )/m);
+  for (const part of parts) {
+    if (!part.startsWith("diff --git")) continue;
+    let path;
+    const plus = part.match(/^\+\+\+ (?:b\/)?(\S+)/m);
+    if (plus && plus[1] !== "/dev/null") path = plus[1];
+    if (!path) {
+      const head = part.match(/^diff --git a\/\S+ b\/(\S+)/m);
+      if (head) path = head[1];
+    }
+    out.push({ path: path || "(unknown)", diff: part });
+  }
+  return out;
+}
+
 export function scanDiff(files) {
   const findings = [];
   for (const f of files) {

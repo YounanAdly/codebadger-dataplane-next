@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
-import { scanDiff } from "@/lib/reviewer-core/rules-scanner";
+import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
 import { reportRun } from "@/lib/control-plane";
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
@@ -302,7 +302,7 @@ async function executeReview({
   checkRunId?: number;
 }) {
   const rules = loadRules();
-  const scannerFindings = scanDiff(diff);
+  const scannerFindings = scanDiff(parseUnifiedDiffFiles(diff));
   const aiResult = await runAIReview(rules, diff, fakePr);
   const allFindings = [...scannerFindings, ...(aiResult.findings || [])];
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { scanDiff } from "@/lib/reviewer-core/rules-scanner";
+import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
 import { reportRun } from "@/lib/control-plane";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -486,7 +486,7 @@ export async function POST(req: NextRequest) {
     const diff = await getPullRequestDiff(project, repoId, prId);
 
     const rules = loadRules();
-    const scannerFindings = scanDiff(diff);
+    const scannerFindings = scanDiff(parseUnifiedDiffFiles(diff));
     const aiResult = await runAIReview(rules, diff, {
       title,
       body: description,
