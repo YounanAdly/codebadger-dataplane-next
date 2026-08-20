@@ -2,7 +2,7 @@
 // computes the verdict client-side (never trusts the model to decide fail/pass),
 // and renders comments with ```suggestion blocks for the native Apply button.
 
-import { CODEBADGER_LOGO_URL, COMPANY_NAME, BOT_NAME } from '@/lib/branding';
+import { CODEBADGER_LOGO_URL, COMPANY_NAME, BOT_NAME, isValidSuggestion } from '@/lib/branding';
 
 const SEVERITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEVERITY_ICON: Record<string, string> = {
@@ -101,7 +101,7 @@ function renderCommentBody(f: any) {
     f.explanation,
   ];
   if (f.ruleRef) parts.push('', `📖 _${f.ruleRef}_`);
-  if (typeof f.suggestion === 'string') {
+  if (typeof f.suggestion === 'string' && isValidSuggestion(f.suggestion, f.file)) {
     parts.push('', '```suggestion', f.suggestion, '```');
   }
   parts.push('', `${srcIcon} _${f.source === 'scanner' ? 'Deterministic rules scanner' : 'AI reviewer'} — ${BOT_NAME}_`);

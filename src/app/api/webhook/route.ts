@@ -11,6 +11,7 @@ import {
   CODEBADGER_LOGO_URL,
   SUMMARY_MARKER,
   LEGACY_SUMMARY_MARKER,
+  isValidSuggestion,
 } from "@/lib/branding";
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
@@ -161,7 +162,9 @@ function renderComment(f: any) {
     f.explanation,
   ];
   if (f.ruleRef) parts.push("", `📖 _${f.ruleRef}_`);
-  if (f.suggestion) parts.push("", "```suggestion", f.suggestion, "```");
+  if (f.suggestion && isValidSuggestion(f.suggestion, f.file)) {
+    parts.push("", "```suggestion", f.suggestion, "```");
+  }
   parts.push("", `🦡 _AI reviewer — ${BOT_NAME}_`);
   return parts.join("\n");
 }

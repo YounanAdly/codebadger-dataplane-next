@@ -11,6 +11,7 @@ import {
   CODEBADGER_LOGO_URL,
   SUMMARY_MARKER,
   LEGACY_SUMMARY_MARKER,
+  isValidSuggestion,
 } from "@/lib/branding";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -129,7 +130,7 @@ function renderComment(f: any) {
   ];
   if (f.ruleRef) parts.push(`**Rule:** \`${f.ruleRef}\``);
   parts.push(``, f.explanation);
-  if (f.suggestion) {
+  if (f.suggestion && isValidSuggestion(f.suggestion, f.file)) {
     parts.push(``, `**Suggested fix:**`, "```suggestion", f.suggestion, "```");
   }
   parts.push(``, `---`, `<sub>🦡 ${BOT_ROLE} — ${COMPANY_NAME}</sub>`);

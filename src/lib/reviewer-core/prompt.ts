@@ -142,12 +142,13 @@ Respond with a single JSON object matching this schema. **No markdown fences, no
 ${JSON.stringify(REVIEW_JSON_SCHEMA, null, 2)}
 \`\`\`
 
-## Suggestion rules (critical — GitHub renders these as one-click "Apply" buttons)
-1. \`suggestion\` MUST be the exact replacement text for lines [\`line\`..\`endLine\`] on the RIGHT (new) side of the diff.
-2. Preserve original indentation exactly (tabs vs spaces, count).
-3. No diff markers (\`+\`/\`-\`), no code fences, no comments explaining the fix — put explanations in \`explanation\`.
-4. If a fix requires cross-file changes, omit \`suggestion\` and explain in \`explanation\`.
-5. If the fix is "delete these lines", set \`suggestion\` to an empty string.
+## Suggestion rules (CRITICAL — GitHub / Azure DevOps renders these as one-click "Apply" replacement buttons)
+1. \`suggestion\` MUST be PURE, SYNTACTICALLY VALID replacement code that directly replaces lines [\`line\`..\`endLine\`] in THIS file.
+2. **NEVER** put English instructions, prose explanations, markdown sentences (e.g. "Add X to file Y" or "Please update..."), or comments inside \`suggestion\`. All instructions MUST go into \`explanation\`.
+3. If an issue requires changes in ANOTHER file (e.g. key added in \`ar.json\` but missing in \`en.json\`), **OMIT \`suggestion\`** (or set \`suggestion: null\`) and explain in \`explanation\`. Never insert prose into the current file.
+4. If the target file is a \`.json\` file, \`suggestion\` MUST be valid JSON syntax (e.g. \`"KEY": "value",\` or \`""\` if deleting).
+5. Preserve original indentation exactly (tabs vs spaces, count).
+6. If the fix is "delete these lines", set \`suggestion\` to an empty string \`""\`.
 
 ## Rules you MUST enforce (single source of truth)
 Below is the full project rulebook. Every finding must cite a rule from this corpus.
