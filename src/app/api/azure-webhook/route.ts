@@ -11,8 +11,10 @@ import {
   CODEBADGER_LOGO_URL,
   SUMMARY_MARKER,
   LEGACY_SUMMARY_MARKER,
+  FINGERPRINT_REGEX,
   isValidSuggestion,
 } from "@/lib/branding";
+import { fingerprintOf } from "@/lib/reviewer-core/review-runner";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const AZURE_DEVOPS_PAT = process.env.AZURE_DEVOPS_PAT || "";
@@ -134,7 +136,90 @@ function renderComment(f: any) {
     parts.push(``, `**Suggested fix:**`, "```suggestion", f.suggestion, "```");
   }
   parts.push(``, `---`, `<sub>🦡 ${BOT_ROLE} — ${COMPANY_NAME}</sub>`);
+  parts.push(`<!-- codebadger-ai-review-fp:${fingerprintOf(f)} -->`);
   return parts.join("\n");
+}
+
+/** Recognizes inline finding threads previously posted by the bot. */
+function isBotInlineContent(content?: string) {
+  if (!content) return false;
+  return FINGERPRINT_REGEX.test(content) || content.includes(`${BOT_ROLE} — ${COMPANY_NAME}`);
+}
+
+/** Recognizes the bot's summary thread (new marker or legacy pre-marker body). */
+function isSummaryContent(content?: string) {
+  if (!content) return false;
+  return (
+    content.includes(SUMMARY_MARKER) ||
+    content.includes(LEGACY_SUMMARY_MARKER) ||
+    content.includes(`Reviewed by **${COMPANY_NAME}**`)
+  );
+}
+
+async function listPrThreads(project: string, repoId: string, prId: string) {
+  const res = await ado(
+    `${repoUrl(project, repoId)}/pullRequests/${prId}/threads?api-version=${API_VERSION}`
+  );
+  return res.value || [];
+}
+
+/**
+ * Replace mode: delete every inline finding thread the bot posted on earlier
+ * iterations, so each push leaves exactly one fresh set of findings.
+ * If the thread's first comment cannot be deleted, the thread is closed instead.
+ */
+async function cleanupOldBotThreads(project: string, repoId: string, prId: string) {
+  const threads = await listPrThreads(project, repoId, prId);
+  let removed = 0;
+  for (const t of threads) {
+    if (t.isDeleted) continue;
+    const first = (t.comments || [])[0];
+    if (!first || first.isDeleted) continue;
+    if (!isBotInlineContent(first.content)) continue;
+    try {
+      await ado(
+        `${repoUrl(project, repoId)}/pullRequests/${prId}/threads/${t.id}/comments/${first.id}?api-version=${API_VERSION}`,
+        { method: "DELETE" }
+      );
+      removed++;
+    } catch {
+      try {
+        await ado(
+          `${repoUrl(project, repoId)}/pullRequests/${prId}/threads/${t.id}?api-version=${API_VERSION}`,
+          { method: "PATCH", body: JSON.stringify({ status: 4 }) } // closed
+        );
+        removed++;
+      } catch (e2: any) {
+        console.warn(`[azure-webhook] could not remove old thread ${t.id}: ${e2.message}`);
+      }
+    }
+  }
+  if (removed) console.log(`[azure-webhook] removed ${removed} old inline thread(s) before re-posting`);
+}
+
+/**
+ * Sticky summary: update the existing summary thread if one exists,
+ * otherwise post a new one — so re-runs never stack duplicate summaries.
+ */
+async function postStickySummary(project: string, repoId: string, prId: string, markdown: string) {
+  const body = `${SUMMARY_MARKER}\n${markdown}`;
+  try {
+    const threads = await listPrThreads(project, repoId, prId);
+    for (const t of threads) {
+      if (t.isDeleted) continue;
+      const first = (t.comments || [])[0];
+      if (first && !first.isDeleted && isSummaryContent(first.content)) {
+        await ado(
+          `${repoUrl(project, repoId)}/pullRequests/${prId}/threads/${t.id}/comments/${first.id}?api-version=${API_VERSION}`,
+          { method: "PATCH", body: JSON.stringify({ content: body, parentCommentId: 0 }) }
+        );
+        return;
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[azure-webhook] sticky summary lookup failed, posting fresh thread: ${e.message}`);
+  }
+  await postPrThread(project, repoId, prId, { content: body });
 }
 
 function adoAuthHeader() {
@@ -512,6 +597,12 @@ export async function POST(req: NextRequest) {
     const verdict = allFindings.some((f) => failSeverities.includes(f.severity))
       ? "request_changes"
       : "comment";
+
+    try {
+      await cleanupOldBotThreads(project, repoId, prId);
+    } catch (e: any) {
+      console.warn(`[azure-webhook] old-thread cleanup failed, posting anyway: ${e.message}`);
+    }
 
     for (const f of allFindings.filter((x) => x.file && !x.file.startsWith("("))) {
       try {

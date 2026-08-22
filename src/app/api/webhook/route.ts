@@ -11,8 +11,10 @@ import {
   CODEBADGER_LOGO_URL,
   SUMMARY_MARKER,
   LEGACY_SUMMARY_MARKER,
+  FINGERPRINT_REGEX,
   isValidSuggestion,
 } from "@/lib/branding";
+import { fingerprintOf } from "@/lib/reviewer-core/review-runner";
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
@@ -166,7 +168,53 @@ function renderComment(f: any) {
     parts.push("", "```suggestion", f.suggestion, "```");
   }
   parts.push("", `🦡 _AI reviewer — ${BOT_NAME}_`);
+  parts.push(`<!-- codebadger-ai-review-fp:${fingerprintOf(f)} -->`);
   return parts.join("\n");
+}
+
+/**
+ * Recognizes any inline review comment previously posted by the bot —
+ * new comments carry a fingerprint marker; older ones only the 🦡 footer.
+ */
+function isBotInlineComment(body?: string) {
+  if (!body) return false;
+  return FINGERPRINT_REGEX.test(body) || body.includes(`AI reviewer — ${BOT_NAME}`);
+}
+
+/**
+ * Replace mode: delete every inline review comment the bot posted on earlier
+ * commits, so each push leaves exactly one fresh set of findings — no
+ * duplicates when the PR is synchronized (e.g. after applying a suggestion).
+ */
+async function cleanupOldBotComments(octokit: any, owner: string, repo: string, prNumber: number) {
+  const mine: any[] = [];
+  let page = 1;
+  while (page <= 20) {
+    const { data: comments } = await octokit.rest.pulls.listReviewComments({
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+      page,
+    });
+    if (!comments.length) break;
+    for (const c of comments) {
+      if (isBotInlineComment(c.body)) mine.push(c);
+    }
+    if (comments.length < 100) break;
+    page++;
+  }
+
+  let deleted = 0;
+  for (const c of mine) {
+    try {
+      await octokit.rest.pulls.deleteReviewComment({ owner, repo, comment_id: c.id });
+      deleted++;
+    } catch (e: any) {
+      console.warn(`[review] could not delete old comment ${c.id}: ${e.message}`);
+    }
+  }
+  if (deleted) console.log(`[review] removed ${deleted} old inline comment(s) before re-posting`);
 }
 
 async function postSummary(octokit: any, owner: string, repo: string, prNumber: number, markdown: string) {
@@ -440,6 +488,11 @@ export async function POST(req: NextRequest) {
       });
 
       await postSummary(octokit, owner, repo, prNumber, result.summaryMd);
+      try {
+        await cleanupOldBotComments(octokit, owner, repo, prNumber);
+      } catch (e: any) {
+        console.warn(`[review] old-comment cleanup failed, posting anyway: ${e.message}`);
+      }
       await postReview(
         octokit,
         owner,
