@@ -72,24 +72,43 @@ ${diff.slice(0, 150000)}
 
 Review every file against the rulebook. Line numbers refer to the RIGHT side (new file). Prefer high-signal findings only.`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  );
+  // Retry with exponential backoff for transient errors (429, 503)
+  const MAX_RETRIES = 3;
+  let res: Response | null = null;
+  let lastError = "";
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
 
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+    if (res.ok) break;
+
+    lastError = await res.text().catch(() => "");
+    const isTransient = res.status === 429 || res.status === 503;
+    if (!isTransient || attempt === MAX_RETRIES) {
+      throw new Error(`Gemini ${res.status}: ${lastError}`);
+    }
+
+    // Exponential backoff: 2s, 4s, 8s
+    const delayMs = Math.pow(2, attempt + 1) * 1000;
+    console.warn(`[gemini] ${res.status} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+
+  if (!res || !res.ok) throw new Error(`Gemini failed after ${MAX_RETRIES} retries: ${lastError}`);
 
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
