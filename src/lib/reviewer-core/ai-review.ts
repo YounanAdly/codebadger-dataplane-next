@@ -78,7 +78,7 @@ Review every file against the rulebook. Line numbers refer to the RIGHT side (ne
   let lastError = "";
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
