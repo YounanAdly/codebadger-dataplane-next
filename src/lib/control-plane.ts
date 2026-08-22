@@ -29,6 +29,42 @@ export function isControlPlaneReportingEnabled(): boolean {
   );
 }
 
+/**
+ * Check with the Control Plane whether this project is active.
+ * Returns true if active, false if inactive, and true (fail-open) if the
+ * check fails so we don't block reviews due to a transient network error.
+ */
+export async function checkProjectActive(): Promise<boolean> {
+  const platformUrl = process.env.PLATFORM_URL;
+  const projectId = process.env.PROJECT_ID;
+  const secret = process.env.WEBHOOK_SECRET;
+
+  if (!platformUrl || !projectId || !secret) return true; // fail-open if not configured
+
+  try {
+    const res = await fetch(
+      `${platformUrl.replace(/\/$/, "")}/api/ingest/runs`,
+      {
+        method: "GET",
+        headers: {
+          "x-project-id": projectId,
+          authorization: `Bearer ${secret}`,
+        },
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.active !== false;
+    }
+    // If the check fails, fail-open so we don't block reviews
+    return true;
+  } catch {
+    return true; // fail-open on network error
+  }
+}
+
 export async function reportRun(report: ControlPlaneRunReport): Promise<void> {
   const platformUrl = process.env.PLATFORM_URL;
   const projectId = process.env.PROJECT_ID;

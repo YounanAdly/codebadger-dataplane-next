@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
 import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
-import { reportRun } from "@/lib/control-plane";
+import { reportRun, checkProjectActive } from "@/lib/control-plane";
 import {
   COMPANY_NAME,
   BOT_NAME,
@@ -462,6 +462,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Action ignored" });
     }
 
+    // Check if project is active (Plan §32)
+    const isActive = await checkProjectActive();
+    if (!isActive) {
+      console.log(`[webhook] project inactive — skipping review for PR #${pull_request.number}`);
+      await reportRun({
+        eventType: `pull_request.${action}`,
+        prNumber: pull_request.number,
+        status: "skipped",
+        errorMsg: "Project is inactive",
+      });
+      return NextResponse.json({ message: "Project inactive — review skipped" });
+    }
+
     try {
       const octokit = makeOctokit();
       const owner = repository.owner.login;
@@ -542,6 +555,18 @@ export async function POST(req: NextRequest) {
         errorMsg: `Branch ${branchName} not enabled`,
       });
       return NextResponse.json({ message: `Branch ${branchName} not enabled` });
+    }
+
+    // Check if project is active (Plan §32)
+    const isActive = await checkProjectActive();
+    if (!isActive) {
+      console.log(`[webhook] project inactive — skipping push review for ${branchName}`);
+      await reportRun({
+        eventType: "push",
+        status: "skipped",
+        errorMsg: "Project is inactive",
+      });
+      return NextResponse.json({ message: "Project inactive — review skipped" });
     }
 
     try {
