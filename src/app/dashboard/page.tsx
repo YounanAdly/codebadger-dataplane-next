@@ -235,7 +235,7 @@ export default async function DashboardPage({
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2 text-[#8b949e] text-sm">
                               <img src={pr.avatar} alt="" className="w-5 h-5 rounded-full"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                              />
                               {pr.author}
                             </div>
                           </td>
@@ -299,7 +299,7 @@ export default async function DashboardPage({
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2 text-[#8b949e] text-sm">
                             <img src={c.avatar} alt="" className="w-4 h-4 rounded-full"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            />
                             {c.author}
                           </div>
                         </td>

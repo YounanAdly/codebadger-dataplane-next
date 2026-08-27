@@ -141,7 +141,7 @@ export default async function PRDetailPage({
             <div className="flex items-center gap-5 text-sm text-[#8b949e] flex-wrap">
               <span className="flex items-center gap-1.5">
                 <img src={pull.user?.avatar_url || ""} alt="" className="w-5 h-5 rounded-full"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                />
                 {pull.user?.login || "unknown"}
               </span>
               <span>
