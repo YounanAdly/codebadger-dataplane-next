@@ -1,26 +1,162 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------
+   CodeBadger design tokens
+   Identity: near-black canvas · graphite surfaces · off-white text
+   · controlled vivid red accent (from the badger mark)
+   ------------------------------------------------------------------ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* surfaces */
+  --canvas: #0a0a0c;
+  --surface: #121215;
+  --raised: #17171b;
+  --overlay: #1c1c22;
+
+  /* borders */
+  --border: #26262d;
+  --border-subtle: #1e1e25;
+  --border-strong: #33333b;
+
+  /* text */
+  --fg: #f4f4f5;
+  --fg-secondary: #a2a2ac;
+  --fg-muted: #6e6e78;
+
+  /* brand accent — used sparingly: primary actions, active states, critical */
+  --accent: #e5484d;
+  --accent-hover: #f05f63;
+  --accent-soft: rgba(229, 72, 77, 0.12);
+  --accent-border: rgba(229, 72, 77, 0.32);
+
+  /* status */
+  --success: #4cc38a;
+  --success-soft: rgba(76, 195, 138, 0.12);
+  --success-border: rgba(76, 195, 138, 0.3);
+  --warning: #e0a52e;
+  --warning-soft: rgba(224, 165, 46, 0.12);
+  --warning-border: rgba(224, 165, 46, 0.3);
+  --info: #6ba6e8;
+  --info-soft: rgba(107, 166, 232, 0.12);
+  --info-border: rgba(107, 166, 232, 0.3);
+  --neutral-soft: rgba(162, 162, 172, 0.1);
+  --neutral-border: rgba(162, 162, 172, 0.25);
+
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-overlay: var(--overlay);
+  --color-line: var(--border);
+  --color-line-subtle: var(--border-subtle);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-secondary);
+  --color-fg-3: var(--fg-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-border: var(--info-border);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--canvas);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+::selection {
+  background: rgba(229, 72, 77, 0.35);
+  color: #fff;
+}
+
+/* slim, quiet scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* accessible focus */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------------
+   Motion — fast, subtle, reduced-motion aware
+   ------------------------------------------------------------------ */
+
+@keyframes cb-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes cb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cb-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes cb-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.82); }
+}
+
+.cb-fade-up {
+  animation: cb-fade-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cb-fade-in {
+  animation: cb-fade-in 0.4s ease both;
+}
+.cb-pulse-dot {
+  animation: cb-pulse-dot 2.2s ease-in-out infinite;
+}
+
+/* skeleton placeholder shaped like its content */
+.cb-skeleton {
+  border-radius: 6px;
+  background: linear-gradient(
+    100deg,
+    var(--raised) 40%,
+    var(--overlay) 50%,
+    var(--raised) 60%
+  );
+  background-size: 200% 100%;
+  animation: cb-shimmer 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-fade-up,
+  .cb-fade-in,
+  .cb-pulse-dot,
+  .cb-skeleton {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

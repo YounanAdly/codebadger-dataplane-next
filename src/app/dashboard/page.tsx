@@ -6,6 +6,10 @@
 import Link from "next/link";
 import { makeOctokit } from "@/lib/providers/github";
 import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER } from "@/lib/branding";
+import {
+  AppShell, PageHeader, StatCard, VerdictBadge, EmptyState,
+  IconPullRequest, IconArrowRight, IconExternal,
+} from "@/components/ui";
 
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || "";
 const COMPANY_NAME = "CodeBadger";
@@ -32,29 +36,24 @@ function findingsCount(body: string): number {
   }, 0);
 }
 
-function VerdictBadge({ verdict }: { verdict: string }) {
-  const cfg: Record<string, { bg: string; c: string; label: string; icon: string }> = {
-    success: { bg: "rgba(63,185,80,0.15)", c: "#3fb950", label: "Approved", icon: "✓" },
-    failure: { bg: "rgba(248,81,73,0.15)", c: "#f85149", label: "Changes Required", icon: "✕" },
-    comment: { bg: "rgba(210,153,34,0.15)", c: "#d29922", label: "Comment", icon: "●" },
-    pending: { bg: "rgba(88,166,255,0.15)", c: "#58a6ff", label: "Pending", icon: "○" },
-  };
-  const v = cfg[verdict] || cfg.pending;
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: v.bg, color: v.c }}>
-      {v.icon} {v.label}
-    </span>
-  );
+function relativeTime(dateStr: string): string {
+  if (!dateStr) return "—";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function StatCard({ label, value, color }: { label: string; value: string | number; color: string }) {
-  return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#008c98] transition-all hover:-translate-y-0.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-[#8b949e] mb-2">{label}</div>
-      <div className={`${color} text-3xl font-bold tracking-tight`}>{value}</div>
-    </div>
-  );
-}
+const TABS = [
+  { key: "prs", label: "Pull Requests", short: "PRs" },
+  { key: "commits", label: "Commits", short: "Commits" },
+  { key: "branches", label: "Branches", short: "Branches" },
+] as const;
 
 export default async function DashboardPage({
   searchParams,
@@ -62,14 +61,18 @@ export default async function DashboardPage({
   searchParams: Promise<{ tab?: string; branch?: string }>;
 }) {
   const { tab = "prs", branch: branchFilter = "all" } = await searchParams;
+  const activeTab = (TABS.some((t) => t.key === tab) ? tab : "prs") as string;
   const { owner, repo } = parseRepo();
 
   if (!owner || !repo) {
     return (
-      <div className="min-h-screen bg-[#0d1117] text-[#c9d1d9] flex items-center justify-center">
-        <div className="text-center max-w-md p-8 bg-[#161b22] border border-[#30363d] rounded-xl">
-          <h1 className="text-xl font-bold text-[#f85149] mb-2">Not Configured</h1>
-          <p className="text-[#8b949e]">GITHUB_REPOSITORY env var is not set.</p>
+      <div className="flex min-h-screen items-center justify-center bg-canvas px-6 text-fg">
+        <div className="cb-fade-up max-w-md rounded-xl border border-line bg-surface p-8 text-center">
+          <h1 className="mb-2 text-lg font-semibold text-accent">Dataplane not configured</h1>
+          <p className="text-sm text-fg-3">
+            Set the <code className="rounded bg-raised px-1.5 py-0.5 font-mono text-xs text-fg-2">GITHUB_REPOSITORY</code>{" "}
+            environment variable to enable the dashboard.
+          </p>
         </div>
       </div>
     );
@@ -140,204 +143,220 @@ export default async function DashboardPage({
   const otherCount = prs.length - successCount - failureCount;
 
   const buildUrl = (t: string, b?: string) => `/dashboard?tab=${t}&branch=${b || branchFilter}`;
+  const criticalFindings = failureCount;
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-[#c9d1d9]">
-      <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="w-64 bg-[#161b22] border-r border-[#30363d] p-6 flex flex-col fixed h-screen overflow-y-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <img src="/logo.jpg" alt="CodeBadger" className="w-10 h-10 rounded-xl object-cover" />
-            <span className="font-bold text-lg">{COMPANY_NAME}</span>
-          </div>
-          <div className="bg-[rgba(0,140,152,0.12)] border border-[rgba(0,140,152,0.25)] text-[#00b4c4] px-3 py-2 rounded-lg text-sm font-semibold mb-8 break-all">
-            {owner}/{repo}
-          </div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-[#8b949e] mb-3">Navigation</div>
-          {(["prs", "commits", "branches"] as const).map((t) => (
-            <Link key={t} href={buildUrl(t)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mb-1 ${
-                tab === t ? "bg-[rgba(0,140,152,0.15)] text-[#00b4c4]" : "text-[#8b949e] hover:bg-[#1c2128] hover:text-[#c9d1d9]"
+    <AppShell active={activeTab} owner={owner} repo={repo}>
+      <PageHeader
+        title={activeTab === "prs" ? "Pull Request Reviews" : activeTab === "commits" ? "Commit Activity" : "Branches"}
+        description={`AI-powered code review for ${owner}/${repo}`}
+      >
+        <a
+          href={`https://github.com/${owner}/${repo}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-xs font-semibold text-fg-2 transition-colors duration-150 hover:border-line-strong hover:text-fg"
+        >
+          <IconExternal className="h-3.5 w-3.5" />
+          Repository
+        </a>
+      </PageHeader>
+
+      {/* Tabs */}
+      <div className="mb-6 inline-flex rounded-xl border border-line-subtle bg-surface p-1">
+        {TABS.map((t) => {
+          const isActive = activeTab === t.key;
+          const count = t.key === "prs" ? prs.length : t.key === "commits" ? commits.length : branches.length;
+          return (
+            <Link
+              key={t.key}
+              href={buildUrl(t.key)}
+              aria-current={isActive ? "page" : undefined}
+              className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-150 ${
+                isActive ? "bg-raised text-fg shadow-[inset_0_0_0_1px_var(--border)]" : "text-fg-3 hover:text-fg-2"
               }`}
             >
-              {t === "prs" ? "🔀 Pull Requests" : t === "commits" ? "📦 Commits" : "🌿 Branches"}
+              {t.label}
+              <span className={`rounded-full px-1.5 py-px text-[11px] font-semibold tabular-nums ${isActive ? "bg-accent-soft text-accent" : "bg-raised text-fg-3"}`}>
+                {count}
+              </span>
             </Link>
-          ))}
-        </aside>
+          );
+        })}
+      </div>
 
-        {/* Main */}
-        <main className="ml-64 flex-1 p-8 max-w-6xl">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight mb-1">
-              {tab === "prs" ? "Pull Request Reviews" : tab === "commits" ? "Commit Reviews" : "Branch Controls"}
-            </h1>
-            <p className="text-[#8b949e] text-sm">AI-powered code review for {owner}/{repo}</p>
+      {/* ========= PRS ========= */}
+      {activeTab === "prs" && (
+        <>
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Total PRs" value={prs.length} hint="last 25 by activity" />
+            <StatCard label="Approved" value={successCount} tone="success" />
+            <StatCard label="Changes Required" value={failureCount} tone="failure" />
+            <StatCard label="In Review" value={otherCount} tone="warning" />
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 bg-[#161b22] border border-[#30363d] rounded-xl p-1 mb-6 w-fit">
-            {(["prs", "commits", "branches"] as const).map((t) => (
-              <Link key={t} href={buildUrl(t)}
-                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                  tab === t ? "bg-[#008c98] text-white" : "text-[#8b949e] hover:text-[#c9d1d9]"
-                }`}
-              >
-                {t === "prs" ? "🔀 PRs" : t === "commits" ? "📦 Commits" : "🌿 Branches"}
-                <span className="bg-[rgba(255,255,255,0.2)] px-2 py-0.5 rounded-full text-xs ml-1">
-                  {t === "prs" ? prs.length : t === "commits" ? commits.length : branches.length}
+          <section className="overflow-hidden rounded-xl border border-line-subtle bg-surface cb-fade-up" style={{ animationDelay: "60ms" }}>
+            <div className="flex items-center justify-between border-b border-line-subtle px-5 py-3">
+              <h2 className="text-sm font-semibold text-fg">Recent Pull Requests</h2>
+              {criticalFindings > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-border bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                  {failureCount} requiring changes
                 </span>
-              </Link>
-            ))}
-          </div>
+              )}
+            </div>
 
-          {/* ========= PRS ========= */}
-          {tab === "prs" && (
-            <>
-              <div className="grid grid-cols-4 gap-4 mb-6">
-                <StatCard label="Total PRs" value={prs.length} color="text-[#c9d1d9]" />
-                <StatCard label="Approved" value={successCount} color="text-[#3fb950]" />
-                <StatCard label="Changes Required" value={failureCount} color="text-[#f85149]" />
-                <StatCard label="Other" value={otherCount} color="text-[#d29922]" />
-              </div>
-              <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden">
-                <div className="px-5 py-3 border-b border-[#30363d] flex items-center justify-between">
-                  <h2 className="text-sm font-semibold">Recent Pull Requests</h2>
-                  <span className="bg-[#0d1117] text-[#8b949e] px-2 py-0.5 rounded text-xs font-semibold">{prs.length}</span>
-                </div>
-                {prs.length === 0 ? (
-                  <div className="text-center py-16 text-[#8b949e]">
-                    <h3 className="text-lg font-semibold text-[#c9d1d9] mb-1">No pull requests found</h3>
-                    <p className="text-sm">Reviews will appear here once the bot processes PRs.</p>
-                  </div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-[10px] uppercase tracking-wider text-[#8b949e] bg-[rgba(255,255,255,0.02)]">
-                        <th className="text-left px-5 py-3">Pull Request</th>
-                        <th className="text-left px-5 py-3">Author</th>
-                        <th className="text-left px-5 py-3">Branch</th>
-                        <th className="text-left px-5 py-3">Status</th>
-                        <th className="text-left px-5 py-3">Findings</th>
-                        <th className="text-left px-5 py-3">Updated</th>
-                        <th className="text-left px-5 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {prs.map((pr) => (
-                        <tr key={pr.number} className="border-t border-[#30363d] hover:bg-[#1c2128] transition-colors">
-                          <td className="px-5 py-3">
-                            <div className="font-medium truncate max-w-[300px]">
-                              <a href={`https://github.com/${owner}/${repo}/pull/${pr.number}`} target="_blank" rel="noopener noreferrer"
-                                className="hover:text-[#00b4c4] transition-colors">{pr.title}</a>
-                            </div>
-                            <div className="text-[#8b949e] text-xs font-mono">#{pr.number}</div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-2 text-[#8b949e] text-sm">
-                              <img src={pr.avatar} alt="" className="w-5 h-5 rounded-full"
-                              />
-                              {pr.author}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <code className="text-xs font-mono text-[#8b949e] bg-[#0d1117] px-2 py-0.5 rounded">{pr.branch}</code>
-                          </td>
-                          <td className="px-5 py-3"><VerdictBadge verdict={pr.verdict} /></td>
-                          <td className="px-5 py-3">
-                            <span className={`font-bold text-sm ${pr.findings > 0 ? "text-[#f85149]" : "text-[#8b949e]"}`}>{pr.findings}</span>
-                          </td>
-                          <td className="px-5 py-3 text-[#8b949e] text-xs">
-                            {new Date(pr.reviewDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                          </td>
-                          <td className="px-5 py-3">
-                            <Link href={`/dashboard/pr/${pr.number}`}
-                              className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs font-semibold border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:border-[#008c98] hover:text-[#00b4c4] transition-colors">
-                              Details →
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* ========= COMMITS ========= */}
-          {tab === "commits" && (
-            <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#30363d] flex items-center justify-between">
-                <h2 className="text-sm font-semibold">Recent Commits</h2>
-                <span className="bg-[#0d1117] text-[#8b949e] px-2 py-0.5 rounded text-xs font-semibold">{commits.length}</span>
-              </div>
-              {commits.length === 0 ? (
-                <div className="text-center py-16 text-[#8b949e]">
-                  <h3 className="text-lg font-semibold text-[#c9d1d9] mb-1">No commits found</h3>
-                  <p className="text-sm">Select a branch to view commits.</p>
-                </div>
-              ) : (
+            {prs.length === 0 ? (
+              <EmptyState
+                title="No pull requests yet"
+                body="Reviews will appear here as soon as the AI reviewer processes its first pull request on this repository."
+              />
+            ) : (
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[10px] uppercase tracking-wider text-[#8b949e] bg-[rgba(255,255,255,0.02)]">
-                      <th className="text-left px-5 py-3">Commit</th>
-                      <th className="text-left px-5 py-3">Message</th>
-                      <th className="text-left px-5 py-3">Author</th>
-                      <th className="text-left px-5 py-3">Date</th>
+                    <tr className="border-b border-line-subtle text-left text-[11px] font-medium uppercase tracking-[0.08em] text-fg-3">
+                      <th className="px-5 py-2.5 font-medium">Pull Request</th>
+                      <th className="px-5 py-2.5 font-medium">Author</th>
+                      <th className="hidden px-5 py-2.5 font-medium md:table-cell">Branch</th>
+                      <th className="px-5 py-2.5 font-medium">Status</th>
+                      <th className="px-5 py-2.5 font-medium">Findings</th>
+                      <th className="hidden px-5 py-2.5 font-medium sm:table-cell">Reviewed</th>
+                      <th className="px-5 py-2.5" />
                     </tr>
                   </thead>
                   <tbody>
-                    {commits.map((c) => (
-                      <tr key={c.sha} className="border-t border-[#30363d] hover:bg-[#1c2128] transition-colors">
-                        <td className="px-5 py-3">
-                          <a href={`https://github.com/${owner}/${repo}/commit/${c.sha}`} target="_blank" rel="noopener noreferrer"
-                            className="font-mono text-xs text-[#00b4c4] bg-[rgba(0,140,152,0.1)] px-2 py-0.5 rounded hover:bg-[rgba(0,140,152,0.2)] transition-colors">
-                            {c.sha.slice(0, 7)}
-                          </a>
+                    {prs.map((pr, i) => (
+                      <tr
+                        key={pr.number}
+                        className="cb-fade-in border-t border-line-subtle transition-colors duration-150 hover:bg-raised/60"
+                        style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}
+                      >
+                        <td className="max-w-[320px] px-5 py-3">
+                          <Link
+                            href={`/dashboard/pr/${pr.number}`}
+                            className="block truncate font-medium text-fg transition-colors duration-150 hover:text-accent"
+                            title={pr.title}
+                          >
+                            {pr.title}
+                          </Link>
+                          <span className="font-mono text-xs text-fg-3">#{pr.number}</span>
                         </td>
-                        <td className="px-5 py-3"><div className="truncate max-w-[350px]" title={c.message}>{c.message}</div></td>
                         <td className="px-5 py-3">
-                          <div className="flex items-center gap-2 text-[#8b949e] text-sm">
-                            <img src={c.avatar} alt="" className="w-4 h-4 rounded-full"
-                            />
-                            {c.author}
-                          </div>
+                          <span className="flex items-center gap-2 text-fg-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={pr.avatar} alt="" className="h-5 w-5 rounded-full ring-1 ring-line" loading="lazy" />
+                            <span className="truncate">{pr.author}</span>
+                          </span>
                         </td>
-                        <td className="px-5 py-3 text-[#8b949e] text-xs">
-                          {c.date ? new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}
+                        <td className="hidden px-5 py-3 md:table-cell">
+                          <code className="rounded-md border border-line-subtle bg-raised px-2 py-0.5 font-mono text-xs text-fg-3">{pr.branch}</code>
+                        </td>
+                        <td className="px-5 py-3"><VerdictBadge verdict={pr.verdict} /></td>
+                        <td className="px-5 py-3">
+                          {pr.findings > 0 ? (
+                            <span className="inline-flex min-w-6 justify-center rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-semibold tabular-nums text-accent">
+                              {pr.findings}
+                            </span>
+                          ) : (
+                            <span className="text-xs tabular-nums text-fg-3">0</span>
+                          )}
+                        </td>
+                        <td className="hidden px-5 py-3 text-xs text-fg-3 sm:table-cell" title={pr.reviewDate}>
+                          {relativeTime(pr.reviewDate)}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <Link
+                            href={`/dashboard/pr/${pr.number}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-line-subtle bg-raised px-2.5 py-1 text-xs font-semibold text-fg-3 transition-colors duration-150 hover:border-accent-border hover:text-fg"
+                          >
+                            Review
+                            <IconArrowRight className="h-3 w-3" />
+                          </Link>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              )}
-            </div>
-          )}
-
-          {/* ========= BRANCHES ========= */}
-          {tab === "branches" && (
-            <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#30363d] flex items-center justify-between">
-                <h2 className="text-sm font-semibold">Branches</h2>
-                <span className="bg-[#0d1117] text-[#8b949e] px-2 py-0.5 rounded text-xs font-semibold">{branches.length}</span>
               </div>
+            )}
+          </section>
+        </>
+      )}
+
+      {/* ========= COMMITS ========= */}
+      {activeTab === "commits" && (
+        <section className="overflow-hidden rounded-xl border border-line-subtle bg-surface cb-fade-up">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-subtle px-5 py-3">
+            <h2 className="text-sm font-semibold text-fg">Recent Commits</h2>
+            <form method="get" action="/dashboard" className="flex items-center gap-2">
+              <input type="hidden" name="tab" value="commits" />
+              <label htmlFor="branch-select" className="text-xs text-fg-3">Branch</label>
+              <select
+                id="branch-select"
+                name="branch"
+                defaultValue={branchFilter}
+                className="max-w-[180px] rounded-lg border border-line bg-raised px-2.5 py-1.5 font-mono text-xs text-fg-2 transition-colors duration-150 hover:border-line-strong focus:border-accent-border"
+              >
+                <option value="all">All · default</option>
+                {branches.map((b) => (
+                  <option key={b.name} value={b.name}>{b.name}{b.isDefault ? " (default)" : ""}</option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="rounded-lg border border-line bg-raised px-3 py-1.5 text-xs font-semibold text-fg-2 transition-colors duration-150 hover:border-accent-border hover:text-fg"
+              >
+                View
+              </button>
+            </form>
+          </div>
+
+          {commits.length === 0 ? (
+            <EmptyState
+              title="No commits found"
+              body="Pick a branch above to browse its recent commits, or check that the repository has activity on the default branch."
+            />
+          ) : (
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-[10px] uppercase tracking-wider text-[#8b949e] bg-[rgba(255,255,255,0.02)]">
-                    <th className="text-left px-5 py-3">Branch</th>
-                    <th className="text-left px-5 py-3">Status</th>
-                    <th className="text-left px-5 py-3">Default</th>
+                  <tr className="border-b border-line-subtle text-left text-[11px] font-medium uppercase tracking-[0.08em] text-fg-3">
+                    <th className="px-5 py-2.5 font-medium">Commit</th>
+                    <th className="px-5 py-2.5 font-medium">Message</th>
+                    <th className="hidden px-5 py-2.5 font-medium sm:table-cell">Author</th>
+                    <th className="hidden px-5 py-2.5 font-medium md:table-cell">Date</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {branches.map((b) => (
-                    <tr key={b.name} className="border-t border-[#30363d] hover:bg-[#1c2128] transition-colors">
-                      <td className="px-5 py-3"><code className="font-mono text-sm text-[#00b4c4]">{b.name}</code></td>
+                  {commits.map((c, i) => (
+                    <tr
+                      key={c.sha}
+                      className="cb-fade-in border-t border-line-subtle transition-colors duration-150 hover:bg-raised/60"
+                      style={{ animationDelay: `${Math.min(i * 25, 250)}ms` }}
+                    >
                       <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[rgba(63,185,80,0.15)] text-[#3fb950]">● Active</span>
+                        <a
+                          href={`https://github.com/${owner}/${repo}/commit/${c.sha}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md border border-line-subtle bg-raised px-2 py-0.5 font-mono text-xs text-fg-2 transition-colors duration-150 hover:border-accent-border hover:text-accent"
+                        >
+                          {c.sha.slice(0, 7)}
+                        </a>
                       </td>
-                      <td className="px-5 py-3">
-                        {b.isDefault ? <span className="text-[#3fb950] text-xs font-semibold">✓ Default</span> : <span className="text-[#8b949e] text-xs">—</span>}
+                      <td className="max-w-[380px] px-5 py-3">
+                        <div className="truncate text-fg-2" title={c.message}>{c.message}</div>
+                      </td>
+                      <td className="hidden px-5 py-3 sm:table-cell">
+                        <span className="flex items-center gap-2 text-fg-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={c.avatar} alt="" className="h-4 w-4 rounded-full ring-1 ring-line" loading="lazy" />
+                          <span className="truncate">{c.author}</span>
+                        </span>
+                      </td>
+                      <td className="hidden px-5 py-3 text-xs text-fg-3 md:table-cell">
+                        {c.date ? new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                       </td>
                     </tr>
                   ))}
@@ -345,8 +364,62 @@ export default async function DashboardPage({
               </table>
             </div>
           )}
-        </main>
-      </div>
-    </div>
+        </section>
+      )}
+
+      {/* ========= BRANCHES ========= */}
+      {activeTab === "branches" && (
+        <section className="overflow-hidden rounded-xl border border-line-subtle bg-surface cb-fade-up">
+          <div className="flex items-center justify-between border-b border-line-subtle px-5 py-3">
+            <h2 className="text-sm font-semibold text-fg">Branches</h2>
+            <span className="rounded-full border border-line-subtle bg-raised px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-fg-3">{branches.length}</span>
+          </div>
+          {branches.length === 0 ? (
+            <EmptyState title="No branches found" body="Branches will appear once the repository reports them through GitHub." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line-subtle text-left text-[11px] font-medium uppercase tracking-[0.08em] text-fg-3">
+                    <th className="px-5 py-2.5 font-medium">Branch</th>
+                    <th className="px-5 py-2.5 font-medium">Status</th>
+                    <th className="px-5 py-2.5 font-medium">Default</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {branches.map((b, i) => (
+                    <tr
+                      key={b.name}
+                      className="cb-fade-in border-t border-line-subtle transition-colors duration-150 hover:bg-raised/60"
+                      style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
+                    >
+                      <td className="px-5 py-3">
+                        <code className="font-mono text-xs text-fg-2">{b.name}</code>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success">
+                          <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                          Active
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        {b.isDefault ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-success">
+                            <IconPullRequest className="hidden" />
+                            Default
+                          </span>
+                        ) : (
+                          <span className="text-xs text-fg-3">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+    </AppShell>
   );
 }

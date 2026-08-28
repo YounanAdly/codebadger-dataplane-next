@@ -5,6 +5,10 @@
 import Link from "next/link";
 import { makeOctokit } from "@/lib/providers/github";
 import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from "@/lib/branding";
+import {
+  AppShell, VerdictBadge, SeverityBadge, EmptyState, SEVERITY_CFG,
+  IconArrowLeft, IconExternal, type Severity,
+} from "@/components/ui";
 
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || "";
 
@@ -18,20 +22,7 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-const SEV: Record<string, { icon: string; label: string; color: string; bg: string; border: string }> = {
-  critical: { icon: "🛑", label: "Critical", color: "#f85149", bg: "rgba(248,81,73,0.12)", border: "rgba(248,81,73,0.35)" },
-  high: { icon: "⚠️", label: "High", color: "#d29922", bg: "rgba(210,153,34,0.12)", border: "rgba(210,153,34,0.35)" },
-  medium: { icon: "🟡", label: "Medium", color: "#e3b341", bg: "rgba(227,179,65,0.12)", border: "rgba(227,179,65,0.35)" },
-  low: { icon: "🔵", label: "Low", color: "#58a6ff", bg: "rgba(88,166,255,0.12)", border: "rgba(88,166,255,0.35)" },
-  info: { icon: "ℹ️", label: "Info", color: "#8b949e", bg: "rgba(139,148,158,0.12)", border: "rgba(139,148,158,0.35)" },
-};
-
-const VC: Record<string, { bg: string; border: string; color: string; icon: string }> = {
-  success: { bg: "rgba(63,185,80,0.15)", border: "rgba(63,185,80,0.3)", color: "#3fb950", icon: "✓" },
-  failure: { bg: "rgba(248,81,73,0.15)", border: "rgba(248,81,73,0.3)", color: "#f85149", icon: "✕" },
-  comment: { bg: "rgba(210,153,34,0.15)", border: "rgba(210,153,34,0.3)", color: "#d29922", icon: "●" },
-  pending: { bg: "rgba(88,166,255,0.15)", border: "rgba(88,166,255,0.3)", color: "#58a6ff", icon: "○" },
-};
+const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
 
 export default async function PRDetailPage({
   params,
@@ -44,10 +35,13 @@ export default async function PRDetailPage({
 
   if (!owner || !repo || isNaN(prNum)) {
     return (
-      <div className="min-h-screen bg-[#0d1117] text-[#c9d1d9] flex items-center justify-center">
-        <div className="text-center max-w-md p-8 bg-[#161b22] border border-[#30363d] rounded-xl">
-          <h1 className="text-xl font-bold text-[#f85149] mb-2">Invalid</h1>
-          <p className="text-[#8b949e]">Could not load PR.</p>
+      <div className="flex min-h-screen items-center justify-center bg-canvas px-6 text-fg">
+        <div className="cb-fade-up max-w-md rounded-xl border border-line bg-surface p-8 text-center">
+          <h1 className="mb-2 text-lg font-semibold text-accent">Invalid request</h1>
+          <p className="text-sm text-fg-3">Could not load this pull request.</p>
+          <Link href="/dashboard" className="mt-4 inline-block text-sm text-fg-2 underline-offset-4 hover:text-fg hover:underline">
+            ← Back to dashboard
+          </Link>
         </div>
       </div>
     );
@@ -61,11 +55,13 @@ export default async function PRDetailPage({
     pull = data;
   } catch {
     return (
-      <div className="min-h-screen bg-[#0d1117] text-[#c9d1d9] flex items-center justify-center">
-        <div className="text-center max-w-md p-8 bg-[#161b22] border border-[#30363d] rounded-xl">
-          <h1 className="text-xl font-bold text-[#f85149] mb-2">PR Not Found</h1>
-          <p className="text-[#8b949e]">PR #{prNum} could not be loaded.</p>
-          <Link href="/dashboard" className="inline-block mt-4 text-[#00b4c4] hover:underline">← Back</Link>
+      <div className="flex min-h-screen items-center justify-center bg-canvas px-6 text-fg">
+        <div className="cb-fade-up max-w-md rounded-xl border border-line bg-surface p-8 text-center">
+          <h1 className="mb-2 text-lg font-semibold text-accent">PR not found</h1>
+          <p className="text-sm text-fg-3">Pull request #{prNum} could not be loaded from {owner}/{repo}.</p>
+          <Link href="/dashboard" className="mt-4 inline-block text-sm text-fg-2 underline-offset-4 hover:text-fg hover:underline">
+            ← Back to dashboard
+          </Link>
         </div>
       </div>
     );
@@ -113,136 +109,148 @@ export default async function PRDetailPage({
     else if (botSummary.body.includes("Approve")) { verdict = "success"; verdictLabel = "Approved"; }
     else { verdict = "comment"; verdictLabel = "Comment"; }
   }
-  const vc = VC[verdict] || VC.pending;
+
+  const prUrl = `https://github.com/${owner}/${repo}/pull/${prNum}`;
+  const criticalCount = counts["critical"] || 0;
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-[#c9d1d9]">
-      <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="w-60 bg-[#161b22] border-r border-[#30363d] p-6 flex flex-col fixed h-screen">
-          <div className="flex items-center gap-3 mb-8">
-            <img src="/logo.jpg" alt="CodeBadger" className="w-10 h-10 rounded-xl object-cover" />
-            <span className="font-bold text-lg">CodeBadger</span>
-          </div>
-          <div className="bg-[rgba(0,140,152,0.12)] border border-[rgba(0,140,152,0.25)] text-[#00b4c4] px-3 py-2 rounded-lg text-sm font-semibold break-all">
-            {owner}/{repo}
-          </div>
-        </aside>
+    <AppShell active="prs" owner={owner} repo={repo}>
+      <Link
+        href="/dashboard"
+        className="mb-5 inline-flex items-center gap-1.5 text-sm text-fg-3 transition-colors duration-150 hover:text-fg"
+      >
+        <IconArrowLeft className="h-3.5 w-3.5" />
+        Back to dashboard
+      </Link>
 
-        {/* Main */}
-        <main className="ml-60 flex-1 p-8 max-w-4xl">
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-[#8b949e] hover:text-[#00b4c4] mb-6 transition-colors">
-            ← Back to Dashboard
-          </Link>
+      {/* PR header */}
+      <header className="cb-fade-up mb-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="max-w-3xl text-lg font-semibold leading-snug tracking-tight text-fg">{esc(pull.title)}</h1>
+          <a
+            href={prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-xs font-semibold text-white transition-colors duration-150 hover:bg-accent-hover"
+          >
+            <IconExternal className="h-3.5 w-3.5" />
+            View on GitHub
+          </a>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-fg-3">
+          <span className="flex items-center gap-1.5 text-fg-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pull.user?.avatar_url || ""} alt="" className="h-5 w-5 rounded-full ring-1 ring-line" />
+            {pull.user?.login || "unknown"}
+          </span>
+          <span className="font-mono text-xs">#{prNum}</span>
+          <span className="font-mono text-xs">
+            <span className="text-fg-2">{pull.head?.ref}</span>
+            <span className="mx-1 text-fg-3">→</span>
+            <span className="text-fg-2">{pull.base?.ref}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full ${pull.merged ? "bg-[#a371f7]" : pull.state === "closed" ? "bg-fg-3" : "bg-success"}`} />
+            {pull.merged ? "Merged" : pull.state === "closed" ? "Closed" : "Open"}
+          </span>
+        </div>
+      </header>
 
-          {/* PR Header */}
-          <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 mb-5">
-            <h1 className="text-xl font-bold tracking-tight mb-3 leading-snug">{esc(pull.title)}</h1>
-            <div className="flex items-center gap-5 text-sm text-[#8b949e] flex-wrap">
-              <span className="flex items-center gap-1.5">
-                <img src={pull.user?.avatar_url || ""} alt="" className="w-5 h-5 rounded-full"
-                />
-                {pull.user?.login || "unknown"}
-              </span>
-              <span>
-                <a href={`https://github.com/${owner}/${repo}/pull/${prNum}`} target="_blank" rel="noopener noreferrer"
-                  className="text-[#00b4c4] font-medium hover:underline">PR #{prNum}</a>
-              </span>
-              <span className="font-mono text-xs">{pull.head?.ref} → {pull.base?.ref}</span>
-              <span>{pull.merged ? "✓ Merged" : pull.state === "closed" ? "✕ Closed" : "● Open"}</span>
-            </div>
-          </div>
+      {/* Verdict */}
+      <div className="cb-fade-up mb-6 flex flex-wrap items-center gap-3" style={{ animationDelay: "40ms" }}>
+        <VerdictBadge verdict={verdict} size="lg" />
+        <span className="text-sm text-fg-3">{verdictLabel}</span>
+      </div>
 
-          {/* Verdict + GitHub link */}
-          <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
-            <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm"
-              style={{ backgroundColor: vc.bg, color: vc.color, border: `1px solid ${vc.border}` }}>
-              {vc.icon} {verdictLabel}
-            </div>
-            <a href={`https://github.com/${owner}/${repo}/pull/${prNum}`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#008c98] text-white text-sm font-semibold hover:bg-[#00b4c4] transition-colors">
-              View on GitHub
-            </a>
-          </div>
-
-          {/* Severity chips */}
-          <div className="flex gap-3 mb-6 flex-wrap">
-            {Object.entries(counts).map(([sev, count]) => {
-              const s = SEV[sev] || SEV.info;
+      {/* Findings overview */}
+      {findings.length > 0 && (
+        <div className="cb-fade-up mb-6 rounded-xl border border-line-subtle bg-surface p-4" style={{ animationDelay: "80ms" }}>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            {SEVERITY_ORDER.filter((s) => counts[s]).map((sev) => {
+              const cfg = SEVERITY_CFG[sev];
               return (
-                <div key={sev} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                  style={{ color: s.color, border: `1px solid ${s.border}`, backgroundColor: s.bg }}>
-                  {s.icon} {s.label}: {count}
+                <div key={sev} className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
+                  <span className="text-lg font-semibold tabular-nums text-fg">{counts[sev]}</span>
+                  <span className="text-xs text-fg-3">{cfg.label}</span>
                 </div>
               );
             })}
-            {findings.length === 0 && botSummary && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                style={{ color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)", backgroundColor: "rgba(63,185,80,0.12)" }}>
-                ✨ No issues found
-              </div>
-            )}
-            {!botSummary && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                style={{ color: "#58a6ff", border: "1px solid rgba(88,166,255,0.3)", backgroundColor: "rgba(88,166,255,0.12)" }}>
-                ⏳ Not reviewed yet
-              </div>
-            )}
+            <div className="ml-auto text-xs text-fg-3">
+              {findings.length} finding{findings.length === 1 ? "" : "s"}
+              {criticalCount > 0 && <span className="ml-1 font-semibold text-accent">· {criticalCount} critical</span>}
+            </div>
           </div>
+        </div>
+      )}
 
-          {/* Findings */}
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold">Review Findings</h2>
-            <span className="bg-[#0d1117] text-[#8b949e] px-2 py-0.5 rounded text-xs font-semibold border border-[#30363d]">{findings.length}</span>
-          </div>
-
-          {!botSummary ? (
-            <div className="text-center py-20 bg-[#161b22] border border-[#30363d] rounded-2xl">
-              <h3 className="text-lg font-semibold text-[#c9d1d9] mb-1">⏳ Not Reviewed Yet</h3>
-              <p className="text-[#8b949e] text-sm">The AI reviewer hasn&apos;t processed this PR yet.</p>
-            </div>
-          ) : findings.length === 0 ? (
-            <div className="text-center py-20 bg-[#161b22] border border-[#30363d] rounded-2xl">
-              <h3 className="text-lg font-semibold text-[#c9d1d9] mb-1">✨ Clean Code</h3>
-              <p className="text-[#8b949e] text-sm">No rule violations found in this pull request.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {findings.map((f, i) => {
-                const s = SEV[f.severity] || SEV.info;
-                return (
-                  <div key={i} className="bg-[#161b22] border rounded-2xl overflow-hidden" style={{ borderColor: s.border }}>
-                    <div className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ backgroundColor: s.bg }}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide"
-                          style={{ color: s.color, border: `1px solid ${s.border}` }}>
-                          {s.icon} {s.label}
-                        </span>
-                        <span className="font-semibold text-sm" style={{ color: s.color }}>{esc(f.title)}</span>
-                      </div>
-                      <a href={`https://github.com/${owner}/${repo}/pull/${prNum}#discussion-${f.line}`} target="_blank" rel="noopener noreferrer"
-                        className="font-mono text-xs text-[#8b949e] bg-[#0d1117] px-2 py-1 rounded border border-[#30363d] hover:border-[#008c98] hover:text-[#00b4c4] transition-colors">
-                        {f.path}:{f.line}
-                      </a>
-                    </div>
-                    <div className="px-5 py-4">
-                      <p className="text-[#8b949e] text-sm leading-relaxed mb-4 whitespace-pre-wrap">{esc(f.explanation)}</p>
-                      {f.suggestion && (
-                        <div className="bg-[#0d1117] border border-[#30363d] rounded-xl overflow-hidden">
-                          <div className="flex items-center justify-between px-4 py-2 bg-[rgba(255,255,255,0.03)] border-b border-[#30363d]">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8b949e]">Suggested Change</span>
-                          </div>
-                          <pre className="p-4 text-sm font-mono text-[#c9d1d9] overflow-x-auto whitespace-pre leading-relaxed">{f.suggestion}</pre>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </main>
+      {/* Findings */}
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-fg">Review Findings</h2>
       </div>
-    </div>
+
+      {!botSummary ? (
+        <div className="rounded-xl border border-line-subtle bg-surface">
+          <EmptyState
+            title="Not reviewed yet"
+            body="The AI reviewer hasn't processed this pull request. Push a new commit or trigger a review to generate findings."
+            cta={{ href: prUrl, label: "Open pull request", external: true }}
+          />
+        </div>
+      ) : findings.length === 0 ? (
+        <div className="rounded-xl border border-success-border bg-success-soft/40">
+          <EmptyState
+            title="Clean review"
+            body="No rule violations were found in this pull request. Nice work."
+          />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {findings.map((f, i) => {
+            const cfg = SEVERITY_CFG[(f.severity as Severity) in SEVERITY_CFG ? (f.severity as Severity) : "info"];
+            return (
+              <article
+                key={i}
+                id={`finding-${i}`}
+                className="cb-fade-up group overflow-hidden rounded-xl border border-line-subtle bg-surface transition-colors duration-200 hover:border-line-strong"
+                style={{ animationDelay: `${Math.min(120 + i * 50, 500)}ms` }}
+              >
+                <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                    <SeverityBadge severity={f.severity} />
+                    <h3 className="text-sm font-semibold text-fg">{esc(f.title)}</h3>
+                  </div>
+                  <a
+                    href={`${prUrl}/files${f.line ? `#discussion-${f.line}` : ""}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 rounded-md border border-line-subtle bg-raised px-2 py-1 font-mono text-[11px] text-fg-3 transition-colors duration-150 hover:border-accent-border hover:text-fg-2"
+                    title={`Open ${f.path} on GitHub`}
+                  >
+                    {f.path}:{f.line}
+                  </a>
+                </div>
+                <div className="border-t border-line-subtle px-5 py-4">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg-2">{esc(f.explanation)}</p>
+                  {f.suggestion && (
+                    <div className="mt-4 overflow-hidden rounded-lg border border-line-subtle">
+                      <div className="flex items-center justify-between border-b border-line-subtle bg-raised px-4 py-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-fg-3">Suggested change</span>
+                        <span className="flex gap-1" aria-hidden="true">
+                          <span className="h-2 w-2 rounded-full bg-accent/70" />
+                          <span className="h-2 w-2 rounded-full bg-warning/60" />
+                          <span className="h-2 w-2 rounded-full bg-success/60" />
+                        </span>
+                      </div>
+                      <pre className="overflow-x-auto whitespace-pre bg-canvas px-4 py-3.5 font-mono text-[13px] leading-relaxed text-fg-2">{f.suggestion}</pre>
+                    </div>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </AppShell>
   );
 }
