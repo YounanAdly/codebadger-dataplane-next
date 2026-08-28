@@ -19,7 +19,7 @@ import {
   fetchPrDiff,
   fetchCommitDiff,
 } from "@/lib/providers/github";
-import { executeReview, loadRules } from "@/lib/reviewer-core/ai-review";
+import { executeReview } from "@/lib/reviewer-core/ai-review";
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 

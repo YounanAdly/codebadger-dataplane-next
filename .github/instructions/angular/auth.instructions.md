@@ -1,3 +1,8 @@
+---
+description: "Use before touching authentication: auth services, interceptors, guards, OTP/login/create-account screens, or anything under src/app/shared/services/auth/. Documents the shipped dual-token cookie auth flow."
+applyTo: "src/app/shared/services/auth/**,src/app/shared/interceptors/auth.interceptor.ts,src/app/public/login/**,src/app/public/create-account/**"
+---
+
 # Auth Flow
 
 > **Status**: Dual-token cookie auth — **shipped**.
@@ -76,12 +81,12 @@ Then use the returned `correlationId` + `devCode` on `/api/v1/auth/otp/verify` (
 
 | File | Responsibility |
 |---|---|
-| [`auth-api.service.ts`](../../src/app/shared/services/auth/auth-api.service.ts) | HTTP surface for `/api/v1/auth/*`. Returns `ApiEnvelope<T>`. |
-| [`auth.types.ts`](../../src/app/shared/services/auth/auth.types.ts) | `VerifyOtpResult` / `RefreshTokenResult` — `{ accessToken, accessTokenExpiresAtUtc }`. Plus `JwtClaims` for the decoded JWT payload (`contact_id`, `account_type`, `phone`, `sub`, …). |
-| [`auth.service.ts`](../../src/app/shared/services/auth.service.ts) | Holds JWT in in-memory `accessToken` signal (never persisted). Persists only non-secret metadata (`auth_token_exp`, `auth_contact_id`, `auth_account_type`) to `sessionStorage`; the latter two are decoded from JWT claims on `setSession`. `isAuthenticated` is a `computed()` over the expiry. `refresh()` is single-flight via `shareReplay`. `logout()` calls the backend so the cookie is cleared, then wipes local state via `finalize`. |
-| [`auth.interceptor.ts`](../../src/app/shared/interceptors/auth.interceptor.ts) | Attaches `Authorization: Bearer <token>` from `AuthService.getAccessToken()` on every `/api/*` call; also `X-Api-Subscription-Key` and `x-source: portal`. Sets `withCredentials: true` so the `refresh_token` cookie rides along on `/token/refresh` and `/logout`. |
-| [`error.interceptor.ts`](../../src/app/shared/interceptors/error.interceptor.ts) | On `401`: single-flight `AuthService.refresh()`, retry once on success; on failure clear session and route to `/:lang/login`. **This is also how page reloads recover** — the in-memory JWT is empty after reload, the first protected call 401s, the existing refresh flow repopulates the signal via the cookie. |
-| [`auth.guard.ts`](../../src/app/shared/guards/auth.guard.ts) / [`login-prompt.guard.ts`](../../src/app/shared/guards/login-prompt.guard.ts) | Route protection — both check `isAuthenticated()`, which stays truthy across reloads because the expiry is in `sessionStorage`. |
+| [`auth-api.service.ts`](../../../src/app/shared/services/auth/auth-api.service.ts) | HTTP surface for `/api/v1/auth/*`. Returns `ApiEnvelope<T>`. |
+| [`auth.types.ts`](../../../src/app/shared/services/auth/auth.types.ts) | `VerifyOtpResult` / `RefreshTokenResult` — `{ accessToken, accessTokenExpiresAtUtc }`. Plus `JwtClaims` for the decoded JWT payload (`contact_id`, `account_type`, `phone`, `sub`, …). |
+| [`auth.service.ts`](../../../src/app/shared/services/auth.service.ts) | Holds JWT in in-memory `accessToken` signal (never persisted). Persists only non-secret metadata (`auth_token_exp`, `auth_contact_id`, `auth_account_type`) to `sessionStorage`; the latter two are decoded from JWT claims on `setSession`. `isAuthenticated` is a `computed()` over the expiry. `refresh()` is single-flight via `shareReplay`. `logout()` calls the backend so the cookie is cleared, then wipes local state via `finalize`. |
+| [`auth.interceptor.ts`](../../../src/app/shared/interceptors/auth.interceptor.ts) | Attaches `Authorization: Bearer <token>` from `AuthService.getAccessToken()` on every `/api/*` call; also `X-Api-Subscription-Key` and `x-source: portal`. Sets `withCredentials: true` so the `refresh_token` cookie rides along on `/token/refresh` and `/logout`. |
+| [`error.interceptor.ts`](../../../src/app/shared/interceptors/error.interceptor.ts) | On `401`: single-flight `AuthService.refresh()`, retry once on success; on failure clear session and route to `/:lang/login`. **This is also how page reloads recover** — the in-memory JWT is empty after reload, the first protected call 401s, the existing refresh flow repopulates the signal via the cookie. |
+| [`auth.guard.ts`](../../../src/app/shared/guards/auth.guard.ts) / [`login-prompt.guard.ts`](../../../src/app/shared/guards/login-prompt.guard.ts) | Route protection — both check `isAuthenticated()`, which stays truthy across reloads because the expiry is in `sessionStorage`. |
 
 ---
 
@@ -100,17 +105,17 @@ That last property is the win: even if XSS happens, the attacker can't carry the
 
 ## 4. Cross-origin (production) checklist
 
-Dev runs same-origin via the Angular dev-server proxy ([proxy.conf.json](../../proxy.conf.json)), so cookies just work. Cross-origin production requires the backend to send:
+Dev runs same-origin via the Angular dev-server proxy ([proxy.conf.json](../../../proxy.conf.json)), so cookies just work. Cross-origin production requires the backend to send:
 
 - `Access-Control-Allow-Credentials: true`
 - `Access-Control-Allow-Origin: <exact-origin>` (NOT `*`)
 - `Set-Cookie: refresh_token=...; SameSite=None; Secure; ...` (current `SameSite=Strict` blocks cross-site)
 
-The frontend is already configured — `withCredentials: true` is set by [`auth.interceptor.ts`](../../src/app/shared/interceptors/auth.interceptor.ts), and the dev-server proxy is in [proxy.conf.json](../../proxy.conf.json).
+The frontend is already configured — `withCredentials: true` is set by [`auth.interceptor.ts`](../../../src/app/shared/interceptors/auth.interceptor.ts), and the dev-server proxy is in [proxy.conf.json](../../../proxy.conf.json).
 
 ---
 
 ## 5. Defense-in-depth (recommended, not blocking)
 
-- **Add a Content-Security-Policy** meta or HTTP header to [src/index.html](../../src/index.html). Example: `default-src 'self'; script-src 'self'; connect-src 'self' https://app-api-marafiq-we-dev-001.azurewebsites.net; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none';` — the single biggest XSS mitigation.
-- **CSRF**: the project already wires `withXsrfConfiguration({ cookieName: 'XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' })` in [`app.config.ts`](../../src/app/app.config.ts) — harmless if unused, automatic protection if the backend ever issues the cookie.
+- **Add a Content-Security-Policy** meta or HTTP header to [src/index.html](../../../src/index.html). Example: `default-src 'self'; script-src 'self'; connect-src 'self' https://app-api-marafiq-we-dev-001.azurewebsites.net; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none';` — the single biggest XSS mitigation.
+- **CSRF**: the project already wires `withXsrfConfiguration({ cookieName: 'XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' })` in [`app.config.ts`](../../../src/app/app.config.ts) — harmless if unused, automatic protection if the backend ever issues the cookie.

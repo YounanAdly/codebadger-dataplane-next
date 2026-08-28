@@ -53,12 +53,12 @@
   "rulesFiles": [
     "rules.md",
     ".github/copilot-instructions.md",
-    ".github/instructions/accessibility.instructions.md",
-    ".github/instructions/api-calls.instructions.md",
-    ".github/instructions/error-handling.instructions.md",
-    ".github/instructions/formly-forms.instructions.md",
-    ".github/instructions/i18n.instructions.md",
-    ".github/instructions/shared-reuse.instructions.md",
-    ".github/instructions/styling-themes.instructions.md"
+    ".github/instructions/angular/accessibility.instructions.md",
+    ".github/instructions/angular/api-calls.instructions.md",
+    ".github/instructions/angular/error-handling.instructions.md",
+    ".github/instructions/angular/formly-forms.instructions.md",
+    ".github/instructions/angular/i18n.instructions.md",
+    ".github/instructions/angular/shared-reuse.instructions.md",
+    ".github/instructions/angular/styling-themes.instructions.md"
   ]
 }

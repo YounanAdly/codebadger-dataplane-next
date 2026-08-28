@@ -14,7 +14,7 @@ interface PlatformPrompt {
   rules: string;
 }
 
-const PROMPTS: Record<Platform, PlatformPrompt> = {
+const PROMPTS: Partial<Record<Platform, PlatformPrompt>> = {
   angular: {
     name: "Angular",
     identity: "a senior Angular 22 code-review agent",
@@ -267,7 +267,7 @@ const PROMPTS: Record<Platform, PlatformPrompt> = {
  * Get the platform-specific prompt section.
  */
 export function getPlatformPrompt(platform: Platform): PlatformPrompt {
-  return PROMPTS[platform] || PROMPTS.generic;
+  return PROMPTS[platform] || PROMPTS.generic!;
 }
 
 /**

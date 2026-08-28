@@ -31,14 +31,14 @@ Anti-rule: never use `BehaviorSubject<T>` + manual `.next()` plumbing for read s
 
 | Concern | Where it lives | Rule |
 |---|---|---|
-| HTTP backend | [app.config.ts](../../src/app/app.config.ts) — `provideHttpClient(withFetch(), withInterceptors([...]))` | Use the **`fetch` backend** (`withFetch()`) — required for HTTP streaming, better SSR transfer, and `AbortSignal` integration in v22. |
-| Auth header, `Accept-Language`, `Source` | [auth.interceptor.ts](../../src/app/shared/interceptors/auth.interceptor.ts) | Already applied to every request. Never set these headers manually. |
-| Global spinner | [loader.interceptor.ts](../../src/app/shared/interceptors/loader.interceptor.ts) + [loader.service.ts](../../src/app/shared/services/loader.service.ts) | Counts in-flight requests via signal. Do not toggle per-call spinners. |
-| HTTP error funnel (401 / 403 / 422 / 0 / 503 / 5xx) | [error.interceptor.ts](../../src/app/shared/interceptors/error.interceptor.ts) | Components handle only 2xx and **domain** 4xx (400 / 404 / 409 / 422 / 429). |
-| Generic CRUD verbs | [base-crud.service.ts](../../src/app/shared/services/base-crud.service.ts) | Extend or inject — never call `HttpClient` from a component. |
-| Endpoints | [constants.ts](../../src/app/constants.ts) | Add a `static` field; never inline a URL string. |
-| Base URL | [environment.ts](../../src/environments/environment.ts) | Already prefixed by `BaseCrudService`. Do not re-prefix. |
-| Toasts | [toast.service.ts](../../src/app/shared/services/toast.service.ts) | Translation-aware + `LiveAnnouncer`. Never inject PrimeNG `MessageService` directly. |
+| HTTP backend | [app.config.ts](../../../src/app/app.config.ts) — `provideHttpClient(withFetch(), withInterceptors([...]))` | Use the **`fetch` backend** (`withFetch()`) — required for HTTP streaming, better SSR transfer, and `AbortSignal` integration in v22. |
+| Auth header, `Accept-Language`, `Source` | [auth.interceptor.ts](../../../src/app/shared/interceptors/auth.interceptor.ts) | Already applied to every request. Never set these headers manually. |
+| Global spinner | [loader.interceptor.ts](../../../src/app/shared/interceptors/loader.interceptor.ts) + [loader.service.ts](../../../src/app/shared/services/loader.service.ts) | Counts in-flight requests via signal. Do not toggle per-call spinners. |
+| HTTP error funnel (401 / 403 / 422 / 0 / 503 / 5xx) | [error.interceptor.ts](../../../src/app/shared/interceptors/error.interceptor.ts) | Components handle only 2xx and **domain** 4xx (400 / 404 / 409 / 422 / 429). |
+| Generic CRUD verbs | [base-crud.service.ts](../../../src/app/shared/services/base-crud.service.ts) | Extend or inject — never call `HttpClient` from a component. |
+| Endpoints | [constants.ts](../../../src/app/constants.ts) | Add a `static` field; never inline a URL string. |
+| Base URL | [environment.ts](../../../src/environments/environment.ts) | Already prefixed by `BaseCrudService`. Do not re-prefix. |
+| Toasts | [toast.service.ts](../../../src/app/shared/services/toast.service.ts) | Translation-aware + `LiveAnnouncer`. Never inject PrimeNG `MessageService` directly. |
 
 ---
 
@@ -416,7 +416,7 @@ provideHttpClient(
 
 ## 16. i18n keys required by this contract
 
-Every key below must exist in both [en.json](../../src/assets/i18n/en.json) and [ar.json](../../src/assets/i18n/ar.json). All pre-seeded:
+Every key below must exist in both [en.json](../../../src/assets/i18n/en.json) and [ar.json](../../../src/assets/i18n/ar.json). All pre-seeded:
 
 ```
 errors.networkTitle / networkDetail        — 0 / 503 (interceptor)

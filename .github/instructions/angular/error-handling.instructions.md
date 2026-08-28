@@ -7,11 +7,11 @@ applyTo: "src/app/**/*.ts,src/app/**/*.html"
 
 ## Hard rules
 
-1. **No component-local `try/catch`** for HTTP transport errors. The [`errorInterceptor`](../../src/app/shared/interceptors/error.interceptor.ts) handles `401` / `403` / `0|503` (network) / `5xx` centrally.
+1. **No component-local `try/catch`** for HTTP transport errors. The [`errorInterceptor`](../../../src/app/shared/interceptors/error.interceptor.ts) handles `401` / `403` / `0|503` (network) / `5xx` centrally.
 2. **No `console.error()`** or **`alert()`** for user-facing failures.
 3. **No `hasError = true`** flags. For data fetching, use `httpResource()` / `resource()` and render the `error()` branch in the template.
-4. **Every toast goes through [`ToastService`](../../src/app/shared/services/toast.service.ts)** — never inject `MessageService` directly. Pass translation keys, never hardcoded strings.
-5. **Translation keys** — every error message lives under the `errors.*` namespace in [en.json](../../src/assets/i18n/en.json) and [ar.json](../../src/assets/i18n/ar.json), with parity in both files.
+4. **Every toast goes through [`ToastService`](../../../src/app/shared/services/toast.service.ts)** — never inject `MessageService` directly. Pass translation keys, never hardcoded strings.
+5. **Translation keys** — every error message lives under the `errors.*` namespace in [en.json](../../../src/assets/i18n/en.json) and [ar.json](../../../src/assets/i18n/ar.json), with parity in both files.
 
 ## Pattern: success after submit
 
@@ -78,7 +78,7 @@ Add new error keys under the same namespace in both catalogs.
 
 ## Form validation messages
 
-Validators registered in [formly.validators.ts](../../src/app/shared/formly/formly.validators.ts) return a key (e.g. `{ emailPattern: true }`); the Formly translate extension in [formly.validation.ts](../../src/app/shared/formly/formly.validation.ts) maps the key to the translated message at the `validation.*` namespace. Never inline literal strings in validators.
+Validators registered in [formly.validators.ts](../../../src/app/shared/formly/formly.validators.ts) return a key (e.g. `{ emailPattern: true }`); the Formly translate extension in [formly.validation.ts](../../../src/app/shared/formly/formly.validation.ts) maps the key to the translated message at the `validation.*` namespace. Never inline literal strings in validators.
 
 ## Anti-patterns (remove on sight)
 

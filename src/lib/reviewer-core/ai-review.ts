@@ -2,56 +2,66 @@
 /**
  * AI review engine — calls Gemini and orchestrates scanner + AI findings.
  * Shared across all providers (GitHub, Azure, future).
+ *
+ * Pipeline: detect affected platforms from the diff → load common + platform
+ * rules → load trusted repository configuration → build the review prompt →
+ * call the AI → validate and normalize findings → return for publishing.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { COMPANY_NAME, CODEBADGER_LOGO_URL, BOT_NAME } from "@/lib/branding";
 import { scanDiff, parseUnifiedDiffFiles } from "./rules-scanner";
-import { detectPlatform, extractFilePaths, type Platform } from "./platform-detector";
-import { buildSystemPrompt } from "./platform-prompts";
+import { detectPlatforms, extractFilePaths, isGeneratedFile, type Platform, type DetectedPlatform } from "./platform-detector";
+import { loadRuleBundle, loadRepositoryConfig, formatPlatforms, type RuleBundle } from "./rule-loader";
+import { buildReviewPrompt } from "./prompt-builder";
+import { normalizeFindings } from "./findings";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-
-export function loadRules(): string {
-  try {
-    return readFileSync(join(process.cwd(), "rules.md"), "utf8");
-  } catch {
-    return "";
-  }
-}
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.7-flash";
 
 export async function runAIReview(
-  rules: string,
   diff: string,
-  pr: { title: string; user?: { login?: string }; body?: string | null }
-): Promise<{ summary: string; verdict: string; findings: any[]; platform: Platform }> {
-  // Detect platform from diff file paths
-  const filePaths = extractFilePaths(diff);
-  const { platform, confidence } = detectPlatform(filePaths);
-  console.log(`[review] detected platform: ${platform} (confidence: ${confidence.toFixed(2)}, files: ${filePaths.length})`);
+  pr: { title: string; user?: { login?: string }; body?: string | null },
+  repoRoot: string = process.cwd()
+): Promise<{
+  summary: string;
+  verdict: string;
+  findings: any[];
+  platform: Platform;
+  platforms: DetectedPlatform[];
+  ruleBundle: RuleBundle;
+}> {
+  const startedAt = Date.now();
 
-  // Build platform-aware system prompt
-  const systemPrompt = buildSystemPrompt(platform, COMPANY_NAME, rules);
+  // 1. Detect affected platforms from changed files (diff), boosted by manifests.
+  const filePaths = extractFilePaths(diff).filter((f) => !isGeneratedFile(f));
+  const detection = detectPlatforms(filePaths);
+  console.log(
+    `[review] detected platforms: ${formatPlatforms(detection.platforms)}${detection.fallbackUsed ? " (fallback)" : ""} — files: ${filePaths.length}`
+  );
 
-  const userPrompt = `## PR metadata
-- Title: ${pr.title}
-- Author: ${pr.user?.login || "unknown"}
-- Description: ${(pr.body || "").slice(0, 2000)}
+  // 2. Load common + platform rules and trusted repository configuration.
+  //    Instruction indexes resolve against the changed files, so only the
+  //    concerns this diff actually touches are inlined into the prompt.
+  const repoConfig = loadRepositoryConfig(repoRoot);
+  const ruleBundle = loadRuleBundle(repoRoot, detection, repoConfig, filePaths);
 
-## Diff (unified)
-\`\`\`diff
-${diff.slice(0, 150000)}
-\`\`\`
+  // 3. Build the deterministic review prompt.
+  const { systemPrompt, userPrompt } = buildReviewPrompt({
+    detection,
+    rules: ruleBundle.text,
+    ruleFiles: [...ruleBundle.commonRuleFiles, ...ruleBundle.platformRuleFiles, ...ruleBundle.repoRuleFiles],
+    repoConfig,
+    pr,
+    diff,
+    companyName: COMPANY_NAME,
+  });
 
-Review every file against the rulebook. Line numbers refer to the RIGHT side (new file). Prefer high-signal findings only.`;
-
-  // Retry with exponential backoff for transient errors (429, 503)
+  // 4. Call the AI review engine (retry with exponential backoff for 429/503).
   const MAX_RETRIES = 3;
   let res: Response | null = null;
   let lastError = "";
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,17 +96,32 @@ Review every file against the rulebook. Line numbers refer to the RIGHT side (ne
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
+  let parsed: any;
   try {
-    return { ...JSON.parse(text), platform };
+    parsed = JSON.parse(text);
   } catch {
     const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) return { ...JSON.parse(match[1]), platform };
-    const first = text.indexOf("{");
-    const last = text.lastIndexOf("}");
-    if (first >= 0 && last > first)
-      return { ...JSON.parse(text.slice(first, last + 1)), platform };
-    throw new Error("Invalid JSON from AI");
+    if (match) parsed = JSON.parse(match[1]);
+    else {
+      const first = text.indexOf("{");
+      const last = text.lastIndexOf("}");
+      if (first >= 0 && last > first) parsed = JSON.parse(text.slice(first, last + 1));
+      else throw new Error("Invalid JSON from AI");
+    }
   }
+
+  // 5. Validate and normalize findings: tag platform, drop generated files,
+  //    deduplicate identical findings across platforms.
+  const findings = normalizeFindings(parsed.findings || [], detection.platforms);
+
+  console.log(`[review] AI review finished in ${Date.now() - startedAt}ms — findings: ${findings.length}`);
+  return {
+    ...parsed,
+    findings,
+    platform: detection.primary,
+    platforms: detection.platforms,
+    ruleBundle,
+  };
 }
 
 export interface ReviewResult {
@@ -121,9 +146,8 @@ export async function executeReview({
   fakePr: { title: string; user?: { login?: string }; body?: string | null };
   renderComment: (f: any) => string;
 }): Promise<ReviewResult> {
-  const rules = loadRules();
   const scannerFindings = scanDiff(parseUnifiedDiffFiles(diff));
-  const aiResult = await runAIReview(rules, diff, fakePr);
+  const aiResult = await runAIReview(diff, fakePr);
   const allFindings = [...scannerFindings, ...(aiResult.findings || [])];
 
   const failSeverities = ["critical", "high"];
@@ -157,6 +181,10 @@ export async function executeReview({
       )
       .join(" · ") || "✨ No findings.";
 
+  const platformLabel = aiResult.platforms?.length
+    ? aiResult.platforms.map((p: DetectedPlatform) => `${p.name} ${p.confidence.toFixed(2)}`).join(", ")
+    : aiResult.platform || "unknown";
+
   const summaryMd = [
     `## <img src="${CODEBADGER_LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
     "",
@@ -171,7 +199,7 @@ export async function executeReview({
     aiResult.summary || "_(no additional summary)_",
     "",
     "---",
-    `<sub>Reviewed by **${COMPANY_NAME}** · Platform: **${aiResult.platform || "unknown"}** · AI: Gemini · Scanner: ${
+    `<sub>Reviewed by **${COMPANY_NAME}** · Platform: **${platformLabel}** · AI: Gemini · Scanner: ${
       scannerFindings.length
     } · AI: ${aiResult.findings?.length || 0}</sub>`,
   ].join("\n");

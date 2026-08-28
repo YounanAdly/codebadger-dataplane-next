@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
+import { runAIReview } from "@/lib/reviewer-core/ai-review";
 import { reportRun } from "@/lib/control-plane";
 import {
   COMPANY_NAME,
@@ -27,97 +26,6 @@ const ENABLED_BRANCHES = (process.env.ENABLED_BRANCHES || "main,development")
   .split(",")
   .map((b) => b.trim())
   .filter(Boolean);
-
-function loadRules() {
-  try {
-    return readFileSync(join(process.cwd(), "rules.md"), "utf8");
-  } catch {
-    return "";
-  }
-}
-
-async function runAIReview(rules: string, diff: string, pr: any) {
-  const systemPrompt = `You are **CodeBadger Reviewer**, a senior Angular 22 code-review agent for ${COMPANY_NAME}.
-Your ONLY job: read the PR diff and enforce the project's rulebook with surgical precision.
-You are strict, aggressive, and specific. Never say "looks good" without justification.
-
-## Severity guide
-- **critical**: @Input/@Output decorators, *ngIf/*ngFor, NgModules, HttpClient in components, console.error/alert, hardcoded colors in component SCSS outside theme files, missing i18n parity between en.json and ar.json.
-- **high**: missing OnPush, missing @defer, missing aria-label on icon-only buttons, missing NgOptimizedImage priority.
-- **medium**: naming/style violations, missing test spec, minor a11y improvements.
-- **low**: readability/microopts, minor RTL concerns.
-
-## Critical Exemptions & Rules
-1. **Theme files are exempt from color rules**: ANY file in \`src/styles/themes/**/*.scss\`, \`src/styles/**/*theme*.scss\`, \`**/_variables*.scss\`, or token definitions is ALLOWED to contain raw hex/rgb/rgba color definitions. Do not flag colors inside theme files.
-2. **Translation catalogs (\`src/assets/i18n/*.json\`) are exempt from hardcoded strings**: Raw translated text in i18n JSON catalogs is expected by definition. Do NOT flag text in translation files.
-3. **New translation keys are valid**: Developers can add new keys. Only enforce parity (matching key in both en.json and ar.json). Never flag a new key as missing simply because it's not pre-seeded in documentation.
-
-## Response format (STRICT JSON — no markdown fences outside)
-{
-  "summary": "Markdown, 3-8 sentences, high-signal only",
-  "verdict": "approve" | "comment" | "request_changes",
-  "findings": [
-    {
-      "file": "repo-relative path",
-      "line": 1,
-      "endLine": null,
-      "severity": "critical" | "high" | "medium" | "low" | "info",
-      "category": "rules" | "security" | "angular22" | "accessibility" | "i18n" | "scss" | "tests" | "performance" | "bug" | "style",
-      "title": "Short imperative headline <80 chars",
-      "explanation": "Why it violates a rule. Cite exact rule id.",
-      "suggestion": "Exact replacement code (optional)",
-      "ruleRef": "rules.md §1.5"
-    }
-  ]
-}
-
-## Rules
-${rules.slice(0, 120000)}`;
-
-  const userPrompt = `## PR metadata
-- Title: ${pr.title}
-- Author: ${pr.user?.login || "unknown"}
-- Description: ${(pr.body || "").slice(0, 2000)}
-
-## Diff (unified)
-\`\`\`diff
-${diff.slice(0, 150000)}
-\`\`\`
-
-Review every file against the rulebook. Line numbers refer to the RIGHT side (new file). Prefer high-signal findings only.`;
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  );
-
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) return JSON.parse(match[1]);
-    const first = text.indexOf("{");
-    const last = text.lastIndexOf("}");
-    if (first >= 0 && last > first) return JSON.parse(text.slice(first, last + 1));
-    throw new Error("Invalid JSON from AI");
-  }
-}
 
 function renderComment(f: any) {
   const icons: Record<string, string> = { critical: "🛑", high: "⚠️", medium: "🟡", low: "🔵", info: "ℹ️" };
@@ -584,9 +492,8 @@ export async function POST(req: NextRequest) {
 
     const diff = await getPullRequestDiff(project, repoId, prId);
 
-    const rules = loadRules();
     const scannerFindings = scanDiff(parseUnifiedDiffFiles(diff));
-    const aiResult = await runAIReview(rules, diff, {
+    const aiResult = await runAIReview(diff, {
       title,
       body: description,
       user: { login: author },
