@@ -172,3 +172,100 @@ export async function getGithubToken(): Promise<string | null> {
 
   return inflightGithubToken;
 }
+
+// ── Fresh Azure DevOps token from the Control Plane ──
+//
+// Entra tokens for Azure DevOps live ~1 hour. The static AZURE_DEVOPS_PAT
+// env is kept only as a legacy fallback; Azure Data Planes fetch a fresh
+// Bearer token per run through the same credentials endpoint.
+
+const AZURE_TOKEN_CACHE_TTL_MS = 10 * 60 * 1000;
+let cachedAzureToken: {
+  authHeader: string;
+  organization: string;
+  fetchedAt: number;
+} | null = null;
+let inflightAzureToken: Promise<{ authHeader: string; organization: string } | null> | null =
+  null;
+
+function azureAuthHeaderFromEnv(): string | null {
+  const pat = process.env.AZURE_DEVOPS_PAT;
+  const org = process.env.AZURE_DEVOPS_ORG;
+  if (!pat || !org) return null;
+  return `Basic ${Buffer.from(`:${pat}`).toString("base64")}`;
+}
+
+async function fetchAzureTokenFromControlPlane(): Promise<{
+  authHeader: string;
+  organization: string;
+} | null> {
+  const platformUrl = process.env.PLATFORM_URL;
+  const projectId = process.env.PROJECT_ID;
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!platformUrl || !projectId || !secret) return null;
+
+  try {
+    const res = await fetch(
+      `${platformUrl.replace(/\/$/, "")}/api/data-plane/credentials`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId, webhookSecret: secret }),
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+    if (!res.ok) {
+      console.error(`[control-plane] azure credentials failed: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    if (!data.token || !data.organization) return null;
+    const scheme = data.scheme === "Basic" ? "Basic" : "Bearer";
+    return {
+      authHeader:
+        scheme === "Basic"
+          ? `Basic ${Buffer.from(`:${data.token}`).toString("base64")}`
+          : `Bearer ${data.token}`,
+      organization: data.organization,
+    };
+  } catch (error) {
+    console.error("[control-plane] azure credentials error:", error);
+    return null;
+  }
+}
+
+/**
+ * Azure DevOps authorization header + organization for ADO API calls.
+ * Prefers a fresh Entra token from the Control Plane; falls back to the
+ * legacy AZURE_DEVOPS_PAT env. Returns null when neither is available.
+ */
+export async function getAzureDevOpsToken(): Promise<{
+  authHeader: string;
+  organization: string;
+} | null> {
+  const org = process.env.AZURE_DEVOPS_ORG || "";
+  if (
+    cachedAzureToken &&
+    Date.now() - cachedAzureToken.fetchedAt < AZURE_TOKEN_CACHE_TTL_MS
+  ) {
+    return cachedAzureToken;
+  }
+  if (inflightAzureToken) return inflightAzureToken;
+
+  inflightAzureToken = (async () => {
+    const fresh = await fetchAzureTokenFromControlPlane();
+    if (fresh) {
+      cachedAzureToken = { ...fresh, fetchedAt: Date.now() };
+      return fresh;
+    }
+    const header = azureAuthHeaderFromEnv();
+    if (header && org) {
+      return { authHeader: header, organization: org };
+    }
+    return null;
+  })().finally(() => {
+    inflightAzureToken = null;
+  });
+
+  return inflightAzureToken;
+}

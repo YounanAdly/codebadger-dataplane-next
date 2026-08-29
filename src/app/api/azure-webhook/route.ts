@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
 import { runAIReview } from "@/lib/reviewer-core/ai-review";
-import { reportRun } from "@/lib/control-plane";
+import { reportRun, checkProjectActive, getAzureDevOpsToken } from "@/lib/control-plane";
 import {
   COMPANY_NAME,
   BOT_NAME,
@@ -20,6 +20,11 @@ const AZURE_DEVOPS_PAT = process.env.AZURE_DEVOPS_PAT || "";
 const AZURE_ORG = process.env.AZURE_DEVOPS_ORG || "";
 const AZURE_WEBHOOK_USER = process.env.AZURE_WEBHOOK_USER || "";
 const AZURE_WEBHOOK_PASS = process.env.AZURE_WEBHOOK_PASS || "";
+
+// Resolved per delivery in POST(): fresh Bearer (Entra) from the Control
+// Plane, or the legacy PAT env. Module-scoped is safe here because a Data
+// Plane serves exactly one project.
+let adoAuth = { header: "", organization: AZURE_ORG };
 
 const API_VERSION = "7.1-preview.1";
 const ENABLED_BRANCHES = (process.env.ENABLED_BRANCHES || "main,development")
@@ -131,8 +136,7 @@ async function postStickySummary(project: string, repoId: string, prId: string, 
 }
 
 function adoAuthHeader() {
-  const basic = Buffer.from(`:${AZURE_DEVOPS_PAT}`).toString("base64");
-  return `Basic ${basic}`;
+  return adoAuth.header;
 }
 
 async function ado(url: string, init: any = {}) {
@@ -155,7 +159,9 @@ async function ado(url: string, init: any = {}) {
 }
 
 function repoUrl(project: string, repoId: string) {
-  return `https://dev.azure.com/${AZURE_ORG}/${encodeURIComponent(project)}/_apis/git/repositories/${repoId}`;
+  // Prefer the token's organization (fresh from the Control Plane) over the
+  // boot-time env value.
+  return `https://dev.azure.com/${adoAuth.organization || AZURE_ORG}/${encodeURIComponent(project)}/_apis/git/repositories/${repoId}`;
 }
 
 async function getPullRequest(project: string, repoId: string, prId: string) {
@@ -413,6 +419,16 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  // Resolve Azure credentials for this delivery: fresh Entra Bearer from the
+  // Control Plane, falling back to the legacy PAT env. Fail-closed when
+  // neither is available — without credentials no review can run.
+  const resolved = await getAzureDevOpsToken();
+  if (!resolved) {
+    console.error("[azure-webhook] rejected: no Azure credentials available");
+    return NextResponse.json({ error: "Azure credentials not configured" }, { status: 401 });
+  }
+  adoAuth = { header: resolved.authHeader, organization: resolved.organization };
 
   const eventType = payload.eventType || "";
 
