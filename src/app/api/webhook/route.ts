@@ -3,8 +3,13 @@
  * GitHub webhook adapter — thin layer that validates, normalizes, and delegates.
  * All GitHub-specific logic lives in src/lib/providers/github.ts.
  * All review logic lives in src/lib/reviewer-core/ai-review.ts.
+ *
+ * GitHub abandons a delivery after ~10s, but reviews take tens of seconds to
+ * minutes. The handler therefore acknowledges immediately (202) and runs the
+ * review in the background via after() (waitUntil) — GitHub sees a fast 200
+ * while the review completes and reports through the Control Plane.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import crypto from "node:crypto";
 import { reportRun, checkProjectActive } from "@/lib/control-plane";
 import {
@@ -20,6 +25,8 @@ import {
   fetchCommitDiff,
 } from "@/lib/providers/github";
 import { executeReview } from "@/lib/reviewer-core/ai-review";
+
+export const maxDuration = 300; // background reviews can take minutes
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 
@@ -62,8 +69,22 @@ export async function POST(req: NextRequest) {
   const event = req.headers.get("x-github-event");
   const startedAt = Date.now();
 
-  if (event === "pull_request") return handlePullRequest(payload, startedAt);
-  if (event === "push") return handlePush(payload, startedAt);
+  if (event === "pull_request") {
+    after(() =>
+      handlePullRequest(payload, startedAt).catch((e) =>
+        console.error("[webhook] unhandled pull_request review error:", e)
+      )
+    );
+    return NextResponse.json({ message: "Review queued" }, { status: 202 });
+  }
+  if (event === "push") {
+    after(() =>
+      handlePush(payload, startedAt).catch((e) =>
+        console.error("[webhook] unhandled push review error:", e)
+      )
+    );
+    return NextResponse.json({ message: "Push review queued" }, { status: 202 });
+  }
   return NextResponse.json({ message: "Event ignored" });
 }
 
