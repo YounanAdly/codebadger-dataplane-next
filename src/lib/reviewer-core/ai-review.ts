@@ -55,10 +55,14 @@ export async function runAIReview(
     companyName: COMPANY_NAME,
   });
 
-  // 4. Call the AI review engine (retry with exponential backoff for 429/503).
-  const MAX_RETRIES = 3;
+  // 4. Call the AI review engine (retry with exponential backoff for transient
+  //    failures: 429 rate limits and 5xx model overload). Free-tier Gemini
+  //    quotas recover on the scale of tens of seconds — the retry budget and
+  //    delays are sized for that, and Retry-After is honored when present.
+  const MAX_RETRIES = 5;
   let res: Response | null = null;
   let lastError = "";
+  let lastStatus = 0;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
@@ -79,14 +83,30 @@ export async function runAIReview(
 
     if (res.ok) break;
 
+    lastStatus = res.status;
     lastError = await res.text().catch(() => "");
-    const isTransient = res.status === 429 || res.status === 503;
+    const isTransient = [429, 500, 502, 503, 504].includes(res.status);
     if (!isTransient || attempt === MAX_RETRIES) {
-      throw new Error(`Gemini ${res.status}: ${lastError}`);
+      if (lastStatus === 429) {
+        throw new Error(
+          `Gemini quota exhausted (429 persisted after ${MAX_RETRIES} retries). ` +
+            `Free-tier keys have low per-minute/per-day limits — wait a few minutes, reduce review frequency, or use a paid key. ${lastError.slice(0, 300)}`
+        );
+      }
+      throw new Error(`Gemini ${lastStatus}: ${lastError.slice(0, 500)}`);
     }
 
-    // Exponential backoff: 2s, 4s, 8s
-    const delayMs = Math.pow(2, attempt + 1) * 1000;
+    // Honor Retry-After when Gemini sends it; otherwise exponential backoff
+    // (2s, 4s, 8s, 16s, 32s) with jitter. Capped at 60s per wait.
+    const retryAfterHeader = Number(res.headers.get("retry-after"));
+    const backoffMs = Math.pow(2, attempt + 1) * 1000;
+    const jitterMs = Math.floor(Math.random() * 800);
+    const delayMs = Math.min(
+      Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader * 1000
+        : backoffMs + jitterMs,
+      60_000
+    );
     console.warn(`[gemini] ${res.status} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
     await new Promise((r) => setTimeout(r, delayMs));
   }
