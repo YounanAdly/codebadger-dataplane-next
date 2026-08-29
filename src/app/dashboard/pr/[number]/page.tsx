@@ -47,7 +47,7 @@ export default async function PRDetailPage({
     );
   }
 
-  const octokit = makeOctokit();
+  const octokit = await makeOctokit();
 
   let pull: any;
   try {

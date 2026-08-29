@@ -1,23 +1,24 @@
 // GitHub Models / Copilot inference endpoint.
 
+import { getGithubToken } from '@/lib/control-plane';
+
 export class GitHubModelsProvider {
   name: string;
-  token: string;
 
   constructor() {
     this.name = 'copilot';
-    this.token = process.env.GITHUB_TOKEN || '';
-    if (!this.token) {
-      throw new Error('GITHUB_TOKEN is not set (required for GitHub Models provider).');
-    }
   }
 
   async review({ system, user, model, temperature, maxOutputTokens }: { system: string; user: string; model: string; temperature?: number; maxOutputTokens?: number }) {
+    const token = await getGithubToken();
+    if (!token) {
+      throw new Error('GitHub token unavailable (required for GitHub Models provider).');
+    }
     const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: `Bearer ${this.token}`,
+        authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         model,

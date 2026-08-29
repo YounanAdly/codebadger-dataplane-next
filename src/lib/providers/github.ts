@@ -12,13 +12,16 @@ import {
   FINGERPRINT_REGEX,
   isValidSuggestion,
 } from "@/lib/branding";
+import { getGithubToken } from "@/lib/control-plane";
 import { fingerprintOf } from "@/lib/reviewer-core/review-runner";
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
-
-export function makeOctokit(): Octokit {
-  if (!GITHUB_TOKEN) throw new Error("GITHUB_TOKEN is not set");
-  return new Octokit({ auth: GITHUB_TOKEN });
+export async function makeOctokit(): Promise<Octokit> {
+  const token = await getGithubToken();
+  if (!token)
+    throw new Error(
+      "GitHub token unavailable (Control Plane credentials and GITHUB_TOKEN env both missing)"
+    );
+  return new Octokit({ auth: token });
 }
 
 // ── Bot comment detection ──

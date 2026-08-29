@@ -78,7 +78,7 @@ export default async function DashboardPage({
     );
   }
 
-  const octokit = makeOctokit();
+  const octokit = await makeOctokit();
 
   // Branches
   let branches: { name: string; isDefault: boolean }[] = [];

@@ -80,7 +80,7 @@ async function handlePullRequest(payload: any, startedAt: number) {
   }
 
   try {
-    const octokit = makeOctokit();
+    const octokit = await makeOctokit();
     const owner = repository.owner.login;
     const repo = repository.name;
     const prNumber = pull_request.number;
@@ -116,7 +116,7 @@ async function handlePush(payload: any, startedAt: number) {
   }
 
   try {
-    const octokit = makeOctokit();
+    const octokit = await makeOctokit();
     const owner = repository.owner.login;
     const repo = repository.name;
     const checkRunId = await createCheckRun(octokit, owner, repo, headSha);

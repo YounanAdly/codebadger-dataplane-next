@@ -2,6 +2,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from '@/lib/branding';
+import { getGithubToken, isControlPlaneReportingEnabled } from '@/lib/control-plane';
 
 const API = 'https://api.github.com';
 
@@ -14,17 +15,23 @@ export class GitHubPlatform {
     this.name = 'github';
     this.token = process.env.GITHUB_TOKEN || '';
     this.repo = process.env.GITHUB_REPOSITORY || ''; // "owner/repo"
-    if (!this.token) throw new Error('GITHUB_TOKEN not set.');
     if (!this.repo) throw new Error('GITHUB_REPOSITORY not set.');
+    // A static token is optional when the Control Plane credentials flow is
+    // configured — #gh() resolves a fresh one lazily.
+    if (!this.token && !isControlPlaneReportingEnabled()) {
+      throw new Error('GITHUB_TOKEN not set.');
+    }
   }
 
   async #gh(path: string, init: any = {}) {
+    const token = this.token || (await getGithubToken());
+    if (!token) throw new Error('GitHub token unavailable (Control Plane + GITHUB_TOKEN env both missing).');
     const res = await fetch(`${API}${path}`, {
       ...init,
       headers: {
         accept: 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28',
-        authorization: `Bearer ${this.token}`,
+        authorization: `Bearer ${token}`,
         'user-agent': 'codebadger-ai-review',
         ...(init.body ? { 'content-type': 'application/json' } : {}),
         ...(init.headers || {}),
