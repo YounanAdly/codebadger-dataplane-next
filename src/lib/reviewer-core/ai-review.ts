@@ -14,8 +14,226 @@ import { loadRuleBundle, loadRepositoryConfig, formatPlatforms, type RuleBundle 
 import { buildReviewPrompt } from "./prompt-builder";
 import { normalizeFindings } from "./findings";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.7-flash";
+
+// ── AI provider chain ────────────────────────────────────────────────────────
+// Reviews try the primary provider (AI_PROVIDER, default gemini) first; if its
+// key is missing or its quota/transient budget is exhausted, the next
+// configured provider takes over. Free-tier keys drain fast when several
+// projects share one key — a fallback keeps reviews flowing on whichever
+// provider still has headroom.
+
+interface AiPrompt {
+  system: string;
+  user: string;
+}
+
+const PROVIDER_MODELS: Record<string, string> = {
+  gemini: process.env.GEMINI_MODEL || "gemini-3.6-flash",
+  openai: process.env.OPENAI_MODEL || "gpt-4o",
+  anthropic: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
+  "azure-openai": process.env.AZURE_OPENAI_MODEL || "gpt-4o",
+};
+
+function providerConfigured(name: string): boolean {
+  switch (name) {
+    case "gemini":
+      return !!process.env.GEMINI_API_KEY;
+    case "openai":
+      return !!process.env.OPENAI_API_KEY;
+    case "anthropic":
+      return !!process.env.ANTHROPIC_API_KEY;
+    case "azure-openai":
+      return !!(
+        process.env.AZURE_OPENAI_API_KEY &&
+        process.env.AZURE_OPENAI_ENDPOINT &&
+        process.env.AZURE_OPENAI_DEPLOYMENT
+      );
+    default:
+      return false;
+  }
+}
+
+function providerChain(): string[] {
+  const primary = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+  const all = ["gemini", "openai", "anthropic", "azure-openai"];
+  const configured = all.filter(providerConfigured);
+  return [primary, ...configured.filter((n) => n !== primary)].filter((n) =>
+    providerConfigured(n)
+  );
+}
+
+/**
+ * Transient-status retry wrapper: 429/5xx with exponential backoff + jitter
+ * and Retry-After support. Gemini gets a longer budget (free tier throttles
+ * hardest); total wait stays well under the function's 300s window.
+ */
+async function fetchWithRetries(
+  provider: string,
+  doFetch: () => Promise<Response>
+): Promise<Response> {
+  const maxRetries = provider === "gemini" ? 5 : 3;
+  let lastStatus = 0;
+  let lastError = "";
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await doFetch();
+    if (res.ok) return res;
+
+    lastStatus = res.status;
+    lastError = await res.text().catch(() => "");
+    const isTransient = [429, 500, 502, 503, 504].includes(lastStatus);
+    if (!isTransient || attempt === maxRetries) break;
+
+    const retryAfterHeader = Number(res.headers.get("retry-after"));
+    const backoffMs = Math.pow(2, attempt + 1) * 1000;
+    const jitterMs = Math.floor(Math.random() * 800);
+    const delayMs = Math.min(
+      Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader * 1000
+        : backoffMs + jitterMs,
+      60_000
+    );
+    console.warn(
+      `[${provider}] ${lastStatus} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`
+    );
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+
+  if (lastStatus === 429) {
+    throw new Error(
+      `${provider} quota exhausted (429 persisted after ${maxRetries} retries). ` +
+        `Free-tier keys have low per-minute/per-day limits — wait, reduce review frequency, or use a paid key. ${lastError.slice(0, 300)}`
+    );
+  }
+  throw new Error(`${provider} ${lastStatus}: ${lastError.slice(0, 500)}`);
+}
+
+async function callProvider(name: string, p: AiPrompt): Promise<string> {
+  switch (name) {
+    case "gemini": {
+      const res = await fetchWithRetries(name, () =>
+        fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${PROVIDER_MODELS.gemini}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: p.system }] },
+              contents: [{ role: "user", parts: [{ text: p.user }] }],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 8192,
+                responseMimeType: "application/json",
+              },
+            }),
+          }
+        )
+      );
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+    case "openai": {
+      const res = await fetchWithRetries(name, () =>
+        fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: PROVIDER_MODELS.openai,
+            temperature: 0.1,
+            max_tokens: 8192,
+            response_format: { type: "json_object" },
+            messages: [
+              { role: "system", content: p.system },
+              { role: "user", content: p.user },
+            ],
+          }),
+        })
+      );
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content ?? "";
+    }
+    case "anthropic": {
+      const res = await fetchWithRetries(name, () =>
+        fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": process.env.ANTHROPIC_API_KEY || "",
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: PROVIDER_MODELS.anthropic,
+            max_tokens: 8192,
+            temperature: 0.1,
+            system: p.system,
+            messages: [{ role: "user", content: p.user }],
+          }),
+        })
+      );
+      const data = await res.json();
+      return (
+        (data.content || [])
+          .filter((b: any) => b.type === "text")
+          .map((b: any) => b.text)
+          .join("\n") || ""
+      );
+    }
+    case "azure-openai": {
+      const endpoint = (process.env.AZURE_OPENAI_ENDPOINT || "").replace(/\/+$/, "");
+      const res = await fetchWithRetries(name, () =>
+        fetch(
+          `${endpoint}/openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT}/chat/completions?api-version=2024-08-01-preview`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "api-key": process.env.AZURE_OPENAI_API_KEY || "",
+            },
+            body: JSON.stringify({
+              temperature: 0.1,
+              max_tokens: 8192,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: p.system },
+                { role: "user", content: p.user },
+              ],
+            }),
+          }
+        )
+      );
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content ?? "";
+    }
+    default:
+      throw new Error(`Unknown AI provider "${name}"`);
+  }
+}
+
+/** Try the provider chain in order; fail only when every provider failed. */
+async function callAiReview(p: AiPrompt): Promise<{ text: string; provider: string }> {
+  const chain = providerChain();
+  if (chain.length === 0) {
+    throw new Error(
+      "No AI provider configured — set GEMINI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or the Azure OpenAI variables."
+    );
+  }
+  const failures: string[] = [];
+  for (const name of chain) {
+    try {
+      const text = await callProvider(name, p);
+      if (!text.trim()) throw new Error("empty response");
+      return { text, provider: name };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[ai] provider "${name}" failed → trying next: ${message}`);
+      failures.push(`${name}: ${message}`);
+    }
+  }
+  throw new Error(`All AI providers failed → ${failures.join(" | ")}`.slice(0, 1500));
+}
 
 export async function runAIReview(
   diff: string,
@@ -55,66 +273,13 @@ export async function runAIReview(
     companyName: COMPANY_NAME,
   });
 
-  // 4. Call the AI review engine (retry with exponential backoff for transient
-  //    failures: 429 rate limits and 5xx model overload). Free-tier Gemini
-  //    quotas recover on the scale of tens of seconds — the retry budget and
-  //    delays are sized for that, and Retry-After is honored when present.
-  const MAX_RETRIES = 5;
-  let res: Response | null = null;
-  let lastError = "";
-  let lastStatus = 0;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 8192,
-            responseMimeType: "application/json",
-          },
-        }),
-      }
-    );
-
-    if (res.ok) break;
-
-    lastStatus = res.status;
-    lastError = await res.text().catch(() => "");
-    const isTransient = [429, 500, 502, 503, 504].includes(res.status);
-    if (!isTransient || attempt === MAX_RETRIES) {
-      if (lastStatus === 429) {
-        throw new Error(
-          `Gemini quota exhausted (429 persisted after ${MAX_RETRIES} retries). ` +
-            `Free-tier keys have low per-minute/per-day limits — wait a few minutes, reduce review frequency, or use a paid key. ${lastError.slice(0, 300)}`
-        );
-      }
-      throw new Error(`Gemini ${lastStatus}: ${lastError.slice(0, 500)}`);
-    }
-
-    // Honor Retry-After when Gemini sends it; otherwise exponential backoff
-    // (2s, 4s, 8s, 16s, 32s) with jitter. Capped at 60s per wait.
-    const retryAfterHeader = Number(res.headers.get("retry-after"));
-    const backoffMs = Math.pow(2, attempt + 1) * 1000;
-    const jitterMs = Math.floor(Math.random() * 800);
-    const delayMs = Math.min(
-      Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
-        ? retryAfterHeader * 1000
-        : backoffMs + jitterMs,
-      60_000
-    );
-    console.warn(`[gemini] ${res.status} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-    await new Promise((r) => setTimeout(r, delayMs));
-  }
-
-  if (!res || !res.ok) throw new Error(`Gemini failed after ${MAX_RETRIES} retries: ${lastError}`);
-
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  // 4. Call the AI review engine through the provider chain (primary provider
+  //    first, then fallbacks on missing keys / exhausted quota / transient 5xx).
+  const { text, provider } = await callAiReview({
+    system: systemPrompt,
+    user: userPrompt,
+  });
+  console.log(`[ai] review generated via "${provider}"`);
 
   let parsed: any;
   try {
