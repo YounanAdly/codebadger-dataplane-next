@@ -25,6 +25,7 @@ import {
   fetchCommitDiff,
 } from "@/lib/providers/github";
 import { executeReview } from "@/lib/reviewer-core/ai-review";
+import { loadConfig } from "@/lib/reviewer-core/config";
 
 export const maxDuration = 300; // background reviews can take minutes
 
@@ -112,6 +113,22 @@ async function handlePullRequest(payload: any, startedAt: number) {
     await postSummary(octokit, owner, repo, prNumber, result.summaryMd);
     try { await cleanupOldBotComments(octokit, owner, repo, prNumber); } catch (e: any) { console.warn(`[review] cleanup failed: ${e.message}`); }
     await postReview(octokit, owner, repo, prNumber, pull_request.head.sha, result.comments);
+
+    // Auto-title: rename the PR to reflect the actual changes. Only on
+    // "opened" (never fight the author on later pushes) and only when the
+    // AI produced a meaningfully different title. Best-effort — a failed
+    // rename must never fail the review.
+    if (action === "opened" && result.suggestedPrTitle && result.suggestedPrTitle !== pull_request.title) {
+      try {
+        const config = await loadConfig();
+        if (config.autoUpdatePrTitle) {
+          await octokit.rest.pulls.update({ owner, repo, pull_number: prNumber, title: result.suggestedPrTitle });
+          console.log(`[review] PR title updated to: "${result.suggestedPrTitle}"`);
+        }
+      } catch (e: any) {
+        console.warn(`[review] could not update PR title: ${e.message}`);
+      }
+    }
 
     await reportRun({ eventType: `pull_request.${action}`, prNumber, verdict: result.verdict, findings: result.allFindings.length, durationMs: Date.now() - startedAt, status: "success" });
     return NextResponse.json({ message: "Review posted", scanner: result.scannerFindings.length, ai: result.aiResult.findings?.length || 0, verdict: result.verdict });

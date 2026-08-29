@@ -242,6 +242,7 @@ export async function runAIReview(
 ): Promise<{
   summary: string;
   verdict: string;
+  prTitle?: string;
   findings: any[];
   platform: Platform;
   platforms: DetectedPlatform[];
@@ -316,6 +317,7 @@ export interface ReviewResult {
   verdict: string;
   scannerFindings: any[];
   aiResult: any;
+  suggestedPrTitle: string | null;
 }
 
 /**
@@ -396,5 +398,9 @@ export async function executeReview({
     verdict,
     scannerFindings,
     aiResult,
+    /** AI-suggested replacement title, cleaned for direct GitHub PR use. */
+    suggestedPrTitle: (typeof aiResult.prTitle === "string"
+      ? aiResult.prTitle.replace(/[\r\n]+/g, " ").replace(/[*_`#]/g, "").trim().slice(0, 120)
+      : "") || null,
   };
 }
