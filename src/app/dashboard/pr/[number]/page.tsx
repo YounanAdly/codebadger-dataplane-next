@@ -3,12 +3,15 @@
  * PR Detail page — shows bot review summary, findings with severity, suggested changes.
  */
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { makeOctokit } from "@/lib/providers/github";
 import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from "@/lib/branding";
+import { DASHBOARD_COOKIE, verifyDashboardAccess } from "@/lib/dashboard-auth";
 import {
   AppShell, VerdictBadge, SeverityBadge, EmptyState, SEVERITY_CFG,
   IconArrowLeft, IconExternal, type Severity,
 } from "@/components/ui";
+import { AccessDeniedView } from "@/components/access-denied";
 
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || "";
 
@@ -26,11 +29,23 @@ const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"]
 
 export default async function PRDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ number: string }>;
+  searchParams: Promise<{ pid?: string; exp?: string; sig?: string }>;
 }) {
   const { number: prNumStr } = await params;
   const prNum = parseInt(prNumStr, 10);
+
+  // Defense in depth: re-verify access at render time, not just in the proxy.
+  const cookieStore = await cookies();
+  const sp = await searchParams;
+  const hasAccess = await verifyDashboardAccess(
+    { pid: sp.pid, exp: sp.exp, sig: sp.sig },
+    cookieStore.get(DASHBOARD_COOKIE)?.value
+  );
+  if (!hasAccess) return <AccessDeniedView />;
+
   const { owner, repo } = parseRepo();
 
   if (!owner || !repo || isNaN(prNum)) {

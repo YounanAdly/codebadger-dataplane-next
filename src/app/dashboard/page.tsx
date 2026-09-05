@@ -4,12 +4,17 @@
  * Shows PRs with review status, branches, and commit status.
  */
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { makeOctokit } from "@/lib/providers/github";
 import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER } from "@/lib/branding";
+import {
+  DASHBOARD_COOKIE, verifyDashboardAccess,
+} from "@/lib/dashboard-auth";
 import {
   AppShell, PageHeader, StatCard, VerdictBadge, EmptyState,
   IconPullRequest, IconArrowRight, IconExternal,
 } from "@/components/ui";
+import { AccessDeniedView } from "@/components/access-denied";
 
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || "";
 const COMPANY_NAME = "CodeBadger";
@@ -58,10 +63,23 @@ const TABS = [
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; branch?: string }>;
+  searchParams: Promise<{
+    tab?: string; branch?: string; pid?: string; exp?: string; sig?: string;
+  }>;
 }) {
-  const { tab = "prs", branch: branchFilter = "all" } = await searchParams;
+  const sp = await searchParams;
+  const { tab = "prs", branch: branchFilter = "all" } = sp;
   const activeTab = (TABS.some((t) => t.key === tab) ? tab : "prs") as string;
+
+  // Defense in depth: the proxy normally blocks unauthenticated requests, but
+  // the page re-verifies so data never renders even if the gate is bypassed.
+  const cookieStore = await cookies();
+  const hasAccess = await verifyDashboardAccess(
+    { pid: sp.pid, exp: sp.exp, sig: sp.sig },
+    cookieStore.get(DASHBOARD_COOKIE)?.value
+  );
+  if (!hasAccess) return <AccessDeniedView />;
+
   const { owner, repo } = parseRepo();
 
   if (!owner || !repo) {
