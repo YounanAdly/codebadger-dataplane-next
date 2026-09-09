@@ -610,7 +610,9 @@ export async function POST(req: NextRequest) {
 
     const summaryMd = summaryLines.join("\n");
 
-    await postPrThread(project, repoId, prId, { content: summaryMd });
+    // Sticky update so re-runs replace the existing summary instead of
+    // stacking duplicate threads on every re-review.
+    await postStickySummary(project, repoId, prId, summaryMd);
 
     await setPrStatus(project, repoId, prId, {
       state: verdict === "request_changes" ? "failed" : "succeeded",
