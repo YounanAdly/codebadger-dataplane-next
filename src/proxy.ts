@@ -30,16 +30,22 @@ export async function proxy(request: NextRequest) {
   });
   const cookieOk = await verifyDashboardCookie(cookieValue);
   if (!linkOk && !cookieOk) {
+    // no-store is essential: a cacheable 401 here poisons the edge cache for
+    // /dashboard itself (the rewrite's URL), locking out every future visit —
+    // including valid signed-link entries — until the next redeploy.
     return NextResponse.rewrite(
       new URL("/dashboard/access-denied", request.url),
-      { status: 401 }
+      { status: 401, headers: { "cache-control": "no-store" } }
     );
   }
 
   // First hop with a signed link: strip pid/exp/sig from the address bar so
   // the signature can't be copied or bookmarked as a long-lived bearer token.
+  // The redirect must not be edge-cacheable either — it carries Set-Cookie.
   if (searchParams.has("sig")) {
-    const response = NextResponse.redirect(new URL(pathname, request.url));
+    const response = NextResponse.redirect(new URL(pathname, request.url), {
+      headers: { "cache-control": "no-store" },
+    });
     response.cookies.set(DASHBOARD_COOKIE, await dashboardCookieValue(), {
       httpOnly: true,
       sameSite: "lax",
