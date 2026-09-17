@@ -15,7 +15,7 @@ import {
   listAzureCommits,
 } from "@/lib/dashboard/azure";
 import {
-  DASHBOARD_COOKIE, verifyDashboardAccess,
+  DASHBOARD_COOKIE, verifyDashboardAccess, dashboardLinkQuery,
 } from "@/lib/dashboard-auth";
 import {
   AppShell, PageHeader, StatCard, VerdictBadge, EmptyState,
@@ -70,6 +70,9 @@ export default async function DashboardPage({
   const sp = await searchParams;
   const { tab = "prs", branch: branchFilter = "all" } = sp;
   const activeTab = (TABS.some((t) => t.key === tab) ? tab : "prs") as string;
+  // Credential to propagate through every internal link so navigation works
+  // regardless of cookie behavior — same token the entry link carried.
+  const linkQs = dashboardLinkQuery({ pid: sp.pid, exp: sp.exp, sig: sp.sig });
 
   // Defense in depth: the proxy normally blocks unauthenticated requests, but
   // the page re-verifies so data never renders even if the gate is bypassed.
@@ -83,7 +86,7 @@ export default async function DashboardPage({
   // ── Azure DevOps branch ──────────────────────────────────────────────
   const azure = await getAzureDashboardContext();
   if (azure) {
-    return azureDashboard(azure, activeTab, branchFilter);
+    return azureDashboard(azure, activeTab, branchFilter, linkQs);
   }
 
   // ── GitHub branch (existing behavior) ────────────────────────────────
@@ -167,11 +170,12 @@ export default async function DashboardPage({
   const failureCount = prs.filter((p) => p.verdict === "failure").length;
   const otherCount = prs.length - successCount - failureCount;
 
-  const buildUrl = (t: string, b?: string) => `/dashboard?tab=${t}&branch=${b || branchFilter}`;
+  const buildUrl = (t: string, b?: string) =>
+    `/dashboard?tab=${t}&branch=${b || branchFilter}${linkQs ? `&${linkQs}` : ""}`;
   const criticalFindings = failureCount;
 
   return (
-    <AppShell active={activeTab} owner={owner} repo={repo}>
+    <AppShell active={activeTab} owner={owner} repo={repo} linkQs={linkQs}>
       <PageHeader
         title={activeTab === "prs" ? "Pull Request Reviews" : activeTab === "commits" ? "Commit Activity" : "Branches"}
         description={`AI-powered code review for ${owner}/${repo}`}
@@ -259,7 +263,7 @@ export default async function DashboardPage({
                       >
                         <td className="max-w-[320px] px-5 py-3">
                           <Link
-                            href={`/dashboard/pr/${pr.number}`}
+                            href={`/dashboard/pr/${pr.number}${linkQs ? `?${linkQs}` : ""}`}
                             className="block truncate font-medium text-fg transition-colors duration-150 hover:text-accent"
                             title={pr.title}
                           >
@@ -298,7 +302,7 @@ export default async function DashboardPage({
                         </td>
                         <td className="px-5 py-3 text-right">
                           <Link
-                            href={`/dashboard/pr/${pr.number}`}
+                            href={`/dashboard/pr/${pr.number}${linkQs ? `?${linkQs}` : ""}`}
                             className="inline-flex items-center gap-1 rounded-lg border border-line-subtle bg-raised px-2.5 py-1 text-xs font-semibold text-fg-3 transition-colors duration-150 hover:border-accent-border hover:text-fg"
                           >
                             Review
@@ -322,6 +326,12 @@ export default async function DashboardPage({
             <h2 className="text-sm font-semibold text-fg">Recent Commits</h2>
             <form method="get" action="/dashboard" className="flex items-center gap-2">
               <input type="hidden" name="tab" value="commits" />
+              {linkQs.split("&").filter(Boolean).map((kv) => {
+                const eq = kv.indexOf("=");
+                return eq > 0 ? (
+                  <input key={kv} type="hidden" name={kv.slice(0, eq)} value={decodeURIComponent(kv.slice(eq + 1))} />
+                ) : null;
+              })}
               <label htmlFor="branch-select" className="text-xs text-fg-3">Branch</label>
               <select
                 id="branch-select"
@@ -472,7 +482,8 @@ function parseRepo(): { owner: string; repo: string } {
 async function azureDashboard(
   ctx: Awaited<ReturnType<typeof getAzureDashboardContext>> & {},
   activeTab: string,
-  branchFilter: string
+  branchFilter: string,
+  linkQs: string
 ) {
   const repoLabel = `${ctx.org}/${ctx.repoName}`;
 
@@ -494,10 +505,11 @@ async function azureDashboard(
   const failureCount = prs.filter((p) => p.verdict === "failure").length;
   const otherCount = prs.length - successCount - failureCount;
 
-  const buildUrl = (t: string, b?: string) => `/dashboard?tab=${t}&branch=${b || branchFilter}`;
+  const buildUrl = (t: string, b?: string) =>
+    `/dashboard?tab=${t}&branch=${b || branchFilter}${linkQs ? `&${linkQs}` : ""}`;
 
   return (
-    <AppShell active={activeTab} owner={ctx.org} repo={ctx.repoName}>
+    <AppShell active={activeTab} owner={ctx.org} repo={ctx.repoName} linkQs={linkQs}>
       <PageHeader
         title={activeTab === "prs" ? "Pull Request Reviews" : activeTab === "commits" ? "Commit Activity" : "Branches"}
         description={`AI-powered code review for ${repoLabel}`}
@@ -591,7 +603,7 @@ async function azureDashboard(
                       >
                         <td className="max-w-[320px] px-5 py-3">
                           <Link
-                            href={`/dashboard/pr/${pr.id}`}
+                            href={`/dashboard/pr/${pr.id}${linkQs ? `?${linkQs}` : ""}`}
                             className="block truncate font-medium text-fg transition-colors duration-150 hover:text-accent"
                             title={pr.title}
                           >
@@ -625,7 +637,7 @@ async function azureDashboard(
                         </td>
                         <td className="px-5 py-3 text-right">
                           <Link
-                            href={`/dashboard/pr/${pr.id}`}
+                            href={`/dashboard/pr/${pr.id}${linkQs ? `?${linkQs}` : ""}`}
                             className="inline-flex items-center gap-1 rounded-lg border border-line-subtle bg-raised px-2.5 py-1 text-xs font-semibold text-fg-3 transition-colors duration-150 hover:border-accent-border hover:text-fg"
                           >
                             Review
@@ -649,6 +661,12 @@ async function azureDashboard(
             <h2 className="text-sm font-semibold text-fg">Recent Commits</h2>
             <form method="get" action="/dashboard" className="flex items-center gap-2">
               <input type="hidden" name="tab" value="commits" />
+              {linkQs.split("&").filter(Boolean).map((kv) => {
+                const eq = kv.indexOf("=");
+                return eq > 0 ? (
+                  <input key={kv} type="hidden" name={kv.slice(0, eq)} value={decodeURIComponent(kv.slice(eq + 1))} />
+                ) : null;
+              })}
               <label htmlFor="branch-select-azure" className="text-xs text-fg-3">Branch</label>
               <select
                 id="branch-select-azure"

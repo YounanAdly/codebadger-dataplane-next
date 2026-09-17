@@ -80,6 +80,20 @@ export interface DashboardLinkParams {
   sig?: string;
 }
 
+/**
+ * Serialize signed-link params for internal links so in-dashboard navigation
+ * carries the same credential as the entry link (cookies are not reliably
+ * replayed in all browser configurations). Returns "" when there are no
+ * params — callers append the result only when non-empty.
+ */
+export function dashboardLinkQuery(params: DashboardLinkParams): string {
+  const sp = new URLSearchParams();
+  if (params.pid) sp.set("pid", params.pid);
+  if (params.exp) sp.set("exp", params.exp);
+  if (params.sig) sp.set("sig", params.sig);
+  return sp.toString();
+}
+
 export async function verifyDashboardLinkParams(
   params: DashboardLinkParams
 ): Promise<boolean> {

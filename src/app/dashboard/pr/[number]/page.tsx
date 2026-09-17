@@ -8,6 +8,7 @@ import { makeOctokit } from "@/lib/providers/github";
 import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from "@/lib/branding";
 import { getAzureDashboardContext } from "@/lib/dashboard/azure";
 import AzurePrDetail from "./azure-detail";
+import { dashboardLinkQuery } from "@/lib/dashboard-auth";
 import { DASHBOARD_COOKIE, verifyDashboardAccess } from "@/lib/dashboard-auth";
 import {
   AppShell, VerdictBadge, SeverityBadge, EmptyState, SEVERITY_CFG,
@@ -47,11 +48,12 @@ export default async function PRDetailPage({
     cookieStore.get(DASHBOARD_COOKIE)?.value
   );
   if (!hasAccess) return <AccessDeniedView />;
+  const linkQs = dashboardLinkQuery({ pid: sp.pid, exp: sp.exp, sig: sp.sig });
 
   // ── Azure DevOps branch ──────────────────────────────────────
   const azure = await getAzureDashboardContext();
   if (azure) {
-    return <AzurePrDetail prNum={prNum} />;
+    return <AzurePrDetail prNum={prNum} linkQs={linkQs} />;
   }
 
   // ── GitHub branch (existing behavior) ────────────────────────
@@ -63,7 +65,7 @@ export default async function PRDetailPage({
         <div className="cb-fade-up max-w-md rounded-xl border border-line bg-surface p-8 text-center">
           <h1 className="mb-2 text-lg font-semibold text-accent">Invalid request</h1>
           <p className="text-sm text-fg-3">Could not load this pull request.</p>
-          <Link href="/dashboard" className="mt-4 inline-block text-sm text-fg-2 underline-offset-4 hover:text-fg hover:underline">
+          <Link href={`/dashboard${linkQs ? `?${linkQs}` : ""}`} className="mt-4 inline-block text-sm text-fg-2 underline-offset-4 hover:text-fg hover:underline">
             ← Back to dashboard
           </Link>
         </div>
@@ -83,7 +85,7 @@ export default async function PRDetailPage({
         <div className="cb-fade-up max-w-md rounded-xl border border-line bg-surface p-8 text-center">
           <h1 className="mb-2 text-lg font-semibold text-accent">PR not found</h1>
           <p className="text-sm text-fg-3">Pull request #{prNum} could not be loaded from {owner}/{repo}.</p>
-          <Link href="/dashboard" className="mt-4 inline-block text-sm text-fg-2 underline-offset-4 hover:text-fg hover:underline">
+          <Link href={`/dashboard${linkQs ? `?${linkQs}` : ""}`} className="mt-4 inline-block text-sm text-fg-2 underline-offset-4 hover:text-fg hover:underline">
             ← Back to dashboard
           </Link>
         </div>
@@ -138,9 +140,9 @@ export default async function PRDetailPage({
   const criticalCount = counts["critical"] || 0;
 
   return (
-    <AppShell active="prs" owner={owner} repo={repo}>
+    <AppShell active="prs" owner={owner} repo={repo} linkQs={linkQs}>
       <Link
-        href="/dashboard"
+        href={`/dashboard${linkQs ? `?${linkQs}` : ""}`}
         className="mb-5 inline-flex items-center gap-1.5 text-sm text-fg-3 transition-colors duration-150 hover:text-fg"
       >
         <IconArrowLeft className="h-3.5 w-3.5" />

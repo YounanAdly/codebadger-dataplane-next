@@ -240,14 +240,17 @@ export function AppShell({
   active,
   owner,
   repo,
+  linkQs,
   children,
 }: {
   active: string;
   owner: string;
   repo: string;
+  /** Signed-link credential to propagate through nav links (may be empty). */
+  linkQs?: string;
   children: ReactNode;
 }) {
-  const navUrl = (t: string) => `/dashboard?tab=${t}`;
+  const navUrl = (t: string) => `/dashboard?tab=${t}${linkQs ? `&${linkQs}` : ""}`;
   return (
     <div className="min-h-screen bg-canvas text-fg">
       {/* Mobile top bar */}
@@ -323,7 +326,9 @@ export function AppShell({
       </aside>
 
       <main className="px-4 py-6 sm:px-6 lg:ml-60 lg:px-10 lg:py-8">
-        <div className="mx-auto max-w-6xl">{children}</div>
+        {/* Full-width content: dashboards are data-dense tables — the old
+            max-w-6xl cap wasted ~40% of the viewport on wide screens. */}
+        <div className="w-full">{children}</div>
       </main>
     </div>
   );

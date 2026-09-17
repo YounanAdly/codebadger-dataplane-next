@@ -36,8 +36,10 @@ function Frame({ title, body }: { title: string; body: string }) {
 
 export default async function AzurePrDetail({
   prNum,
+  linkQs = "",
 }: {
   prNum: number;
+  linkQs?: string;
 }) {
   const ctx = await getAzureDashboardContext();
   if (!ctx) {
@@ -79,9 +81,9 @@ export default async function AzurePrDetail({
   const criticalCount = counts["critical"] || 0;
 
   return (
-    <AppShell active="prs" owner={ctx.org} repo={ctx.repoName}>
+    <AppShell active="prs" owner={ctx.org} repo={ctx.repoName} linkQs={linkQs}>
       <Link
-        href="/dashboard"
+        href={`/dashboard${linkQs ? `?${linkQs}` : ""}`}
         className="mb-5 inline-flex items-center gap-1.5 text-sm text-fg-3 transition-colors duration-150 hover:text-fg"
       >
         <IconArrowLeft className="h-3.5 w-3.5" />
