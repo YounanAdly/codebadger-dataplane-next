@@ -6,6 +6,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { makeOctokit } from "@/lib/providers/github";
 import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from "@/lib/branding";
+import { getAzureDashboardContext } from "@/lib/dashboard/azure";
+import AzurePrDetail from "./azure-detail";
 import { DASHBOARD_COOKIE, verifyDashboardAccess } from "@/lib/dashboard-auth";
 import {
   AppShell, VerdictBadge, SeverityBadge, EmptyState, SEVERITY_CFG,
@@ -46,6 +48,13 @@ export default async function PRDetailPage({
   );
   if (!hasAccess) return <AccessDeniedView />;
 
+  // ── Azure DevOps branch ──────────────────────────────────────
+  const azure = await getAzureDashboardContext();
+  if (azure) {
+    return <AzurePrDetail prNum={prNum} />;
+  }
+
+  // ── GitHub branch (existing behavior) ────────────────────────
   const { owner, repo } = parseRepo();
 
   if (!owner || !repo || isNaN(prNum)) {

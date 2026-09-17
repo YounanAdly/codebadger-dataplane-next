@@ -183,10 +183,16 @@ const AZURE_TOKEN_CACHE_TTL_MS = 10 * 60 * 1000;
 let cachedAzureToken: {
   authHeader: string;
   organization: string;
+  project?: string;
+  repositoryName?: string;
   fetchedAt: number;
 } | null = null;
-let inflightAzureToken: Promise<{ authHeader: string; organization: string } | null> | null =
-  null;
+let inflightAzureToken: Promise<{
+  authHeader: string;
+  organization: string;
+  project?: string;
+  repositoryName?: string;
+} | null> | null = null;
 
 function azureAuthHeaderFromEnv(): string | null {
   const pat = process.env.AZURE_DEVOPS_PAT;
@@ -198,6 +204,8 @@ function azureAuthHeaderFromEnv(): string | null {
 async function fetchAzureTokenFromControlPlane(): Promise<{
   authHeader: string;
   organization: string;
+  project?: string;
+  repositoryName?: string;
 } | null> {
   const platformUrl = process.env.PLATFORM_URL;
   const projectId = process.env.PROJECT_ID;
@@ -227,6 +235,9 @@ async function fetchAzureTokenFromControlPlane(): Promise<{
           ? `Basic ${Buffer.from(`:${data.token}`).toString("base64")}`
           : `Bearer ${data.token}`,
       organization: data.organization,
+      project: typeof data.project === "string" ? data.project : undefined,
+      repositoryName:
+        typeof data.repositoryName === "string" ? data.repositoryName : undefined,
     };
   } catch (error) {
     console.error("[control-plane] azure credentials error:", error);
@@ -242,6 +253,8 @@ async function fetchAzureTokenFromControlPlane(): Promise<{
 export async function getAzureDevOpsToken(): Promise<{
   authHeader: string;
   organization: string;
+  project?: string;
+  repositoryName?: string;
 } | null> {
   const org = process.env.AZURE_DEVOPS_ORG || "";
   if (
