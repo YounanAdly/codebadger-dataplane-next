@@ -3,6 +3,7 @@
  * PR Detail page — shows bot review summary, findings with severity, suggested changes.
  */
 import Link from "next/link";
+import { SyntaxCode } from "@/components/syntax-code";
 import { cookies } from "next/headers";
 import { makeOctokit } from "@/lib/providers/github";
 import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from "@/lib/branding";
@@ -268,7 +269,7 @@ export default async function PRDetailPage({
                           <span className="h-2 w-2 rounded-full bg-success/60" />
                         </span>
                       </div>
-                      <pre className="overflow-x-auto whitespace-pre bg-canvas px-4 py-3.5 font-mono text-[13px] leading-relaxed text-fg-2">{f.suggestion}</pre>
+                      <SyntaxCode code={f.suggestion} filePath={f.path} />
                     </div>
                   )}
                 </div>
