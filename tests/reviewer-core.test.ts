@@ -239,6 +239,61 @@ rules:
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("rejects repository rule paths outside .codebadger", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cb-repo-"));
+    try {
+      mkdirSync(join(dir, ".codebadger"));
+      writeFileSync(join(dir, "outside.md"), "# Outside rule\n\nDo not load this.\n");
+      writeFileSync(join(dir, ".codebadger", "review-config.yml"), "rules:\n  include:\n    - ../outside.md\n");
+      const cfg = loadRepositoryConfig(dir);
+      assert.ok(cfg);
+      const bundle = loadRuleBundle(dir, detectPlatforms(["lib/main.dart"]), cfg);
+      assert.ok(!bundle.text.includes("Do not load this."));
+      assert.ok(bundle.skippedRuleFiles.some((f) => f.includes("outside repository rules")));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects repository rule symlinks that escape .codebadger", (t: any) => {
+    const dir = mkdtempSync(join(tmpdir(), "cb-repo-"));
+    try {
+      mkdirSync(join(dir, ".codebadger"));
+      writeFileSync(join(dir, "outside.md"), "# Outside rule\n\nDo not load this.\n");
+      try {
+        fs.symlinkSync(join(dir, "outside.md"), join(dir, ".codebadger", "linked.md"), "file");
+      } catch (error: any) {
+        if (error.code === "EPERM" || error.code === "EACCES") {
+          t.skip("File symlinks are not permitted on this host");
+          return;
+        }
+        throw error;
+      }
+      writeFileSync(join(dir, ".codebadger", "review-config.yml"), "rules:\n  include:\n    - linked.md\n");
+      const cfg = loadRepositoryConfig(dir);
+      assert.ok(cfg);
+      const bundle = loadRuleBundle(dir, detectPlatforms(["lib/main.dart"]), cfg);
+      assert.ok(!bundle.text.includes("Do not load this."));
+      assert.ok(bundle.skippedRuleFiles.some((f) => f.includes("outside repository rules")));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects indexed instruction paths outside the detected platform", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cb-rules-"));
+    try {
+      mkdirSync(join(dir, "rules", "flutter"), { recursive: true });
+      writeFileSync(join(dir, "outside.instructions.md"), "# Outside instruction\n\nDo not load this.\n");
+      writeFileSync(join(dir, "rules", "flutter", "rules.md"), "# Flutter rules\n\n## Instruction files\n- outside.instructions.md\n");
+      const bundle = loadRuleBundle(dir, detectPlatforms(["lib/main.dart"]), null, ["lib/main.dart"]);
+      assert.ok(!bundle.text.includes("Do not load this."));
+      assert.ok(bundle.skippedRuleFiles.some((f) => f.includes("outside platform instructions")));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("prompt builder", () => {

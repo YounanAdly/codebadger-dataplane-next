@@ -8,9 +8,9 @@
  * files never crash the review, a maximum prompt size is enforced, and every
  * load/skip decision is logged (without logging file contents).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { Platform, PlatformDetectionResult, DetectedPlatform } from "./platform-detector.ts";
 import { sanitizeUntrusted } from "./prompt-builder.ts";
 
@@ -141,6 +141,27 @@ function readRuleFile(path: string): string | null {
     return readFileSync(path, "utf8");
   } catch (e: any) {
     console.warn(`[rule-loader] failed to read ${path} — skipping: ${e.message}`);
+    return null;
+  }
+}
+
+function isInsideDirectory(directory: string, file: string): boolean {
+  const rel = relative(directory, file);
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+/** Confine configurable rule paths, including symlinks, to their rule folder. */
+function confinedRuleFile(repoRoot: string, directory: string, candidate: string): string | null {
+  if (!isInsideDirectory(resolve(repoRoot), resolve(directory))) return null;
+  if (!isInsideDirectory(resolve(directory), resolve(candidate))) return null;
+  try {
+    const realRoot = realpathSync(repoRoot);
+    const realDirectory = realpathSync(directory);
+    const realCandidate = realpathSync(candidate);
+    return isInsideDirectory(realRoot, realDirectory) && isInsideDirectory(realDirectory, realCandidate)
+      ? realCandidate
+      : null;
+  } catch {
     return null;
   }
 }
@@ -286,10 +307,18 @@ export function loadRuleBundle(
       // Resolve the instruction index (if the rules.md declares one).
       const baseContent = readRuleFile(basePath);
       for (const entry of baseContent ? parseIndexEntries(baseContent) : []) {
-        const entryPath = join(repoRoot, entry.path);
+        const entryPath = confinedRuleFile(
+          repoRoot,
+          join(repoRoot, ".github", "instructions", p.name),
+          resolve(repoRoot, entry.path)
+        );
+        if (!entryPath) {
+          skipped.push(`${entry.path} (missing or outside platform instructions)`);
+          continue;
+        }
         const entryContent = readRuleFile(entryPath);
         if (!entryContent) {
-          skipped.push(`${entry.path} (missing)`);
+          skipped.push(`${entry.path} (missing or outside platform instructions)`);
           continue;
         }
         const globs = parseApplyTo(entryContent);
@@ -311,8 +340,17 @@ export function loadRuleBundle(
   if (repoConfig) {
     for (const f of repoConfig.include) {
       const display = `.codebadger/${f}`;
+      const path = confinedRuleFile(
+        repoRoot,
+        join(repoRoot, REPO_CONFIG_DIR),
+        resolve(repoRoot, REPO_CONFIG_DIR, f)
+      );
+      if (!path) {
+        skipped.push(`${display} (missing or outside repository rules)`);
+        continue;
+      }
       const before = repoBlocks.length;
-      addRule(join(repoRoot, REPO_CONFIG_DIR, f), display, repoBlocks);
+      addRule(path, display, repoBlocks);
       if (repoBlocks.length > before) repoRuleFiles.push(display);
     }
   }
