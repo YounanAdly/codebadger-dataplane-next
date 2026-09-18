@@ -1,6 +1,6 @@
 // CodeBadger AI Review Core Engine
 
-export { loadConfig, loadRuleCorpus } from './config';
+export { loadConfig } from './config';
 export { collectDiff } from './diff';
 export { buildSystemPrompt, buildUserPrompt } from './prompt';
 export { createProvider } from './providers';

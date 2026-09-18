@@ -43,22 +43,10 @@
   "focusAreas": {
     "rulesCompliance": true,
     "security": true,
-    "angular22Modernness": true,
     "accessibility": true,
     "i18nParity": true,
     "scssTokens": true,
     "testCoverage": true,
     "performance": true
-  },
-  "rulesFiles": [
-    "rules.md",
-    ".github/copilot-instructions.md",
-    ".github/instructions/angular/accessibility.instructions.md",
-    ".github/instructions/angular/api-calls.instructions.md",
-    ".github/instructions/angular/error-handling.instructions.md",
-    ".github/instructions/angular/formly-forms.instructions.md",
-    ".github/instructions/angular/i18n.instructions.md",
-    ".github/instructions/angular/shared-reuse.instructions.md",
-    ".github/instructions/angular/styling-themes.instructions.md"
-  ]
+  }
 }

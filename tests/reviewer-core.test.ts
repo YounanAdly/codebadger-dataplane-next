@@ -141,6 +141,15 @@ describe("rule loader", () => {
     assert.ok(bundle.text.includes("Flutter Review Rules"));
   });
 
+  test("loads both platform rule sets in a mixed Flutter and Next.js review", () => {
+    const changedFiles = ["pubspec.yaml", "lib/main.dart", "next.config.ts", "app/page.tsx"];
+    const bundle = loadRuleBundle(repoRoot, detectPlatforms(changedFiles), null, changedFiles);
+    assert.ok(bundle.platformRuleFiles.includes("flutter/rules.md"));
+    assert.ok(bundle.platformRuleFiles.includes("nextjs/rules.md"));
+    assert.ok(bundle.text.includes("Flutter Review Rules"));
+    assert.ok(bundle.text.includes("Next.js Review Rules"));
+  });
+
   test("unknown repositories receive the fallback ruleset", () => {
     const bundle = loadRuleBundle(repoRoot, detectPlatforms(["README.md"]));
     assert.equal(bundle.fallbackUsed, true);
