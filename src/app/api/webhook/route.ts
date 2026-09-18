@@ -11,7 +11,8 @@
  */
 import { NextRequest, NextResponse, after } from "next/server";
 import crypto from "node:crypto";
-import { reportRun, checkProjectActive } from "@/lib/control-plane";
+import { reportRun, reportStructuredReview, reportPrState, checkProjectActive } from "@/lib/control-plane";
+import { diffStats, telemetryFindings } from "@/lib/review-telemetry";
 import {
   makeOctokit,
   renderComment,
@@ -91,6 +92,12 @@ export async function POST(req: NextRequest) {
 
 async function handlePullRequest(payload: any, startedAt: number) {
   const { action, pull_request, repository } = payload;
+  if (action === "closed" && pull_request?.number && repository?.owner?.login && repository?.name) {
+    await reportPrState({ provider: "GITHUB", repositoryId: `${repository.owner.login}/${repository.name}`,
+      prNumber: pull_request.number, state: pull_request.merged_at ? "merged" : "closed",
+      mergedAt: pull_request.merged_at || null });
+    return;
+  }
   if (!["opened", "synchronize", "reopened"].includes(action)) {
     return NextResponse.json({ message: "Action ignored" });
   }
@@ -130,7 +137,19 @@ async function handlePullRequest(payload: any, startedAt: number) {
       }
     }
 
-    await reportRun({ eventType: `pull_request.${action}`, prNumber, verdict: result.verdict, findings: result.allFindings.length, durationMs: Date.now() - startedAt, status: "success" });
+    const structured = await reportStructuredReview({
+      provider: "GITHUB", repositoryId: `${owner}/${repo}`, prNumber,
+      revision: pull_request.head.sha, eventType: `pull_request.${action}`,
+      verdict: result.verdict, durationMs: Date.now() - startedAt,
+      author: {
+        id: String(pull_request.user?.id || pull_request.user?.login || "unknown"),
+        displayName: pull_request.user?.login || "unknown",
+        isBot: pull_request.user?.type === "Bot" || /\[bot\]$/i.test(pull_request.user?.login || ""),
+      },
+      ...diffStats(diff), prState: pull_request.state || "open", mergedAt: pull_request.merged_at || null,
+      findings: telemetryFindings(result.allFindings),
+    });
+    if (!structured) await reportRun({ eventType: `pull_request.${action}`, prNumber, verdict: result.verdict, findings: result.allFindings.length, durationMs: Date.now() - startedAt, status: "success" });
     return NextResponse.json({ message: "Review posted", scanner: result.scannerFindings.length, ai: result.aiResult.findings?.length || 0, verdict: result.verdict });
   } catch (err: any) {
     await reportRun({ eventType: `pull_request.${action}`, prNumber: payload.pull_request?.number ?? null, durationMs: Date.now() - startedAt, status: "failed", errorMsg: String(err.message || err).slice(0, 2000) });

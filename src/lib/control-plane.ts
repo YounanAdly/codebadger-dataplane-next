@@ -21,6 +21,71 @@ export interface ControlPlaneRunReport {
   errorMsg?: string | null;
 }
 
+export interface StructuredReviewReport {
+  provider: "GITHUB" | "AZURE_DEVOPS";
+  repositoryId: string;
+  prNumber: number;
+  revision: string;
+  eventType: string;
+  verdict: string;
+  durationMs: number;
+  author: { id: string; displayName: string; isBot: boolean };
+  changedLines: number;
+  changedFiles: number;
+  prState?: string | null;
+  mergedAt?: string | null;
+  findings: Array<{
+    severity: string; category: string; source: string; ruleId: string | null;
+    title: string; file: string | null; line: number | null;
+  }>;
+}
+
+export async function reportPrState(report: {
+  provider: "GITHUB" | "AZURE_DEVOPS"; repositoryId: string; prNumber: number;
+  state: string; mergedAt: string | null;
+}): Promise<boolean> {
+  const platformUrl = process.env.PLATFORM_URL;
+  const projectId = process.env.PROJECT_ID;
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!platformUrl || !projectId || !secret) return false;
+  try {
+    const response = await fetch(`${platformUrl.replace(/\/$/, "")}/api/ingest/pr-state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-project-id": projectId, authorization: `Bearer ${secret}` },
+      body: JSON.stringify(report), signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) console.error(`[control-plane] PR state report failed: ${response.status}`);
+    return response.ok;
+  } catch (error) {
+    console.error("[control-plane] PR state report error:", error);
+    return false;
+  }
+}
+
+/** Best-effort structured telemetry; old control planes still receive run totals. */
+export async function reportStructuredReview(report: StructuredReviewReport): Promise<boolean> {
+  const platformUrl = process.env.PLATFORM_URL;
+  const projectId = process.env.PROJECT_ID;
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!platformUrl || !projectId || !secret) return false;
+  try {
+    const res = await fetch(`${platformUrl.replace(/\/$/, "")}/api/ingest/reviews`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-project-id": projectId, authorization: `Bearer ${secret}` },
+      body: JSON.stringify(report),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.error(`[control-plane] structured report failed: ${res.status}`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("[control-plane] structured report error:", error);
+    return false;
+  }
+}
+
 export function isControlPlaneReportingEnabled(): boolean {
   return !!(
     process.env.PLATFORM_URL &&

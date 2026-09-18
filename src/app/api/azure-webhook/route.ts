@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
 import { runAIReview } from "@/lib/reviewer-core/ai-review";
-import { reportRun, checkProjectActive, getAzureDevOpsToken } from "@/lib/control-plane";
+import { reportRun, reportStructuredReview, reportPrState, checkProjectActive, getAzureDevOpsToken } from "@/lib/control-plane";
+import { diffStats, telemetryFindings } from "@/lib/review-telemetry";
 import {
   COMPANY_NAME,
   BOT_NAME,
@@ -450,6 +451,11 @@ export async function POST(req: NextRequest) {
   if (!project || !repoId || !prId) {
     return NextResponse.json({ error: "malformed webhook — missing project/repoId/prId" }, { status: 400 });
   }
+  if (resource.status === "completed" || resource.status === "abandoned") {
+    await reportPrState({ provider: "AZURE_DEVOPS", repositoryId: String(repoId), prNumber: Number(prId),
+      state: resource.status, mergedAt: resource.status === "completed" ? resource.closedDate || null : null });
+    return NextResponse.json({ ok: true, state: resource.status });
+  }
   if (!ENABLED_BRANCHES.includes(targetBranch)) {
     return NextResponse.json({ ok: true, skipped: `target ${targetBranch} not enabled` });
   }
@@ -622,13 +628,22 @@ export async function POST(req: NextRequest) {
           : "✅ AI Review passed",
     });
 
-    await reportRun({
-      eventType,
-      prNumber: parseInt(prId, 10) || undefined,
-      verdict,
-      findings: allFindings.length,
-      durationMs: Date.now() - startedAt,
-      status: "success",
+    const structured = await reportStructuredReview({
+      provider: "AZURE_DEVOPS", repositoryId: String(repoId), prNumber: Number(prId),
+      revision: String(resource.lastMergeSourceCommit?.commitId || resource.sourceRefCommit?.commitId || crypto.createHash("sha256").update(diff).digest("hex")),
+      eventType, verdict, durationMs: Date.now() - startedAt,
+      author: {
+        id: String(resource.createdBy?.id || resource.createdBy?.uniqueName || author),
+        displayName: author,
+        isBot: /\[bot\]$|bot$|service account/i.test(author),
+      },
+      ...diffStats(diff), prState: resource.status || "active",
+      mergedAt: resource.status === "completed" ? resource.closedDate || null : null,
+      findings: telemetryFindings(allFindings),
+    });
+    if (!structured) await reportRun({
+      eventType, prNumber: parseInt(prId, 10) || undefined, verdict,
+      findings: allFindings.length, durationMs: Date.now() - startedAt, status: "success",
     });
 
     return NextResponse.json({ ok: true, prId, findings: allFindings.length, verdict });
