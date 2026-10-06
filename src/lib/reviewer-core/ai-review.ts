@@ -15,6 +15,7 @@ import { buildReviewPrompt } from "./prompt-builder";
 import { normalizeFindings } from "./findings";
 import type { ProjectRuleFile } from "./project-rules";
 import { withGeminiModel } from "./gemini-model";
+import { fetchWithRetries } from "./provider-request";
 
 // ── AI provider chain ────────────────────────────────────────────────────────
 // Reviews try the primary provider (AI_PROVIDER, default gemini) first; if its
@@ -62,51 +63,6 @@ function providerChain(): string[] {
   );
 }
 
-/**
- * Transient-status retry wrapper: 429/5xx with exponential backoff + jitter
- * and Retry-After support. Gemini gets a longer budget (free tier throttles
- * hardest); total wait stays well under the function's 300s window.
- */
-async function fetchWithRetries(
-  provider: string,
-  doFetch: () => Promise<Response>
-): Promise<Response> {
-  const maxRetries = provider === "gemini" ? 5 : 3;
-  let lastStatus = 0;
-  let lastError = "";
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const res = await doFetch();
-    if (res.ok) return res;
-
-    lastStatus = res.status;
-    lastError = await res.text().catch(() => "");
-    const isTransient = [429, 500, 502, 503, 504].includes(lastStatus);
-    if (!isTransient || attempt === maxRetries) break;
-
-    const retryAfterHeader = Number(res.headers.get("retry-after"));
-    const backoffMs = Math.pow(2, attempt + 1) * 1000;
-    const jitterMs = Math.floor(Math.random() * 800);
-    const delayMs = Math.min(
-      Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
-        ? retryAfterHeader * 1000
-        : backoffMs + jitterMs,
-      60_000
-    );
-    console.warn(
-      `[${provider}] ${lastStatus} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`
-    );
-    await new Promise((r) => setTimeout(r, delayMs));
-  }
-
-  if (lastStatus === 429) {
-    throw new Error(
-      `${provider} quota exhausted (429 persisted after ${maxRetries} retries). ` +
-        `Free-tier keys have low per-minute/per-day limits — wait, reduce review frequency, or use a paid key. ${lastError.slice(0, 300)}`
-    );
-  }
-  throw Object.assign(new Error(`${provider} ${lastStatus}: ${lastError.slice(0, 500)}`), { status: lastStatus });
-}
-
 async function callProvider(name: string, p: AiPrompt): Promise<string> {
   switch (name) {
     case "gemini": {
@@ -127,7 +83,8 @@ async function callProvider(name: string, p: AiPrompt): Promise<string> {
                 },
               }),
             }
-          )
+          ),
+          { model }
         );
         const data = await res.json();
         return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
