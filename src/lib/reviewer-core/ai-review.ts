@@ -16,6 +16,7 @@ import { normalizeFindings } from "./findings";
 import type { ProjectRuleFile } from "./project-rules";
 import { withGeminiModel } from "./gemini-model";
 import { fetchWithRetries } from "./provider-request";
+import { allProvidersFailed } from "./provider-errors";
 
 // ── AI provider chain ────────────────────────────────────────────────────────
 // Reviews try the primary provider (AI_PROVIDER, default gemini) first; if its
@@ -178,7 +179,7 @@ async function callAiReview(p: AiPrompt): Promise<{ text: string; provider: stri
       "No AI provider configured — set GEMINI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or the Azure OpenAI variables."
     );
   }
-  const failures: string[] = [];
+  const failures: Array<{ provider: string; message: string; status?: number }> = [];
   for (const name of chain) {
     try {
       const text = await callProvider(name, p);
@@ -187,10 +188,11 @@ async function callAiReview(p: AiPrompt): Promise<{ text: string; provider: stri
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[ai] provider "${name}" failed → trying next: ${message}`);
-      failures.push(`${name}: ${message}`);
+      const status = error instanceof Error && "status" in error && typeof error.status === "number" ? error.status : undefined;
+      failures.push({ provider: name, message, status });
     }
   }
-  throw new Error(`All AI providers failed → ${failures.join(" | ")}`.slice(0, 1500));
+  throw allProvidersFailed(failures);
 }
 
 export async function runAIReview(

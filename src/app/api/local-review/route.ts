@@ -1,6 +1,7 @@
 import { executeReview } from "@/lib/reviewer-core/ai-review";
 import { verifyLocalReviewSignature, normalizeLocalFindings } from "@/lib/local-review-auth";
 import { isProjectRulePath, type ProjectRuleFile } from "@/lib/reviewer-core/project-rules";
+import { localReviewFailure } from "@/lib/reviewer-core/provider-errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -42,7 +43,9 @@ export async function POST(request: Request) {
     const findings = normalizeLocalFindings(result.allFindings, input.files);
     return json({ summary: String(result.aiResult.summary || "").slice(0, 8000),
       verdict: findings.some((f) => f.severity === "critical" || f.severity === "high") ? "request_changes" : "comment", findings });
-  } catch {
-    return json({ error: "Local review failed. Check the configured AI provider." }, 502);
+  } catch (error) {
+    const failure = localReviewFailure(error);
+    console.error("[local-review] failed", failure.body.errorCode);
+    return json(failure.body, failure.status);
   }
 }
