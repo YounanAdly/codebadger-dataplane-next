@@ -13,6 +13,7 @@ import { detectPlatforms, extractFilePaths, isGeneratedFile, type Platform, type
 import { loadRuleBundle, loadRepositoryConfig, formatPlatforms, type RuleBundle } from "./rule-loader";
 import { buildReviewPrompt } from "./prompt-builder";
 import { normalizeFindings } from "./findings";
+import type { ProjectRuleFile } from "./project-rules";
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.7-flash";
 
@@ -238,6 +239,7 @@ async function callAiReview(p: AiPrompt): Promise<{ text: string; provider: stri
 export async function runAIReview(
   diff: string,
   pr: { title: string; user?: { login?: string }; body?: string | null },
+  projectRules: ProjectRuleFile[] = [],
   repoRoot: string = process.cwd()
 ): Promise<{
   summary: string;
@@ -261,7 +263,7 @@ export async function runAIReview(
   //    Instruction indexes resolve against the changed files, so only the
   //    concerns this diff actually touches are inlined into the prompt.
   const repoConfig = loadRepositoryConfig(repoRoot);
-  const ruleBundle = loadRuleBundle(repoRoot, detection, repoConfig, filePaths);
+  const ruleBundle = loadRuleBundle(repoRoot, detection, repoConfig, filePaths, projectRules);
 
   // 3. Build the deterministic review prompt.
   const { systemPrompt, userPrompt } = buildReviewPrompt({
@@ -328,13 +330,15 @@ export async function executeReview({
   diff,
   fakePr,
   renderComment,
+  projectRules = [],
 }: {
   diff: string;
   fakePr: { title: string; user?: { login?: string }; body?: string | null };
   renderComment: (f: any) => string;
+  projectRules?: ProjectRuleFile[];
 }): Promise<ReviewResult> {
   const scannerFindings = scanDiff(parseUnifiedDiffFiles(diff));
-  const aiResult = await runAIReview(diff, fakePr);
+  const aiResult = await runAIReview(diff, fakePr, projectRules);
   const allFindings = [...scannerFindings, ...(aiResult.findings || [])];
 
   const failSeverities = ["critical", "high"];

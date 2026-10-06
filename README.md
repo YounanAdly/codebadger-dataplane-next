@@ -1,4 +1,10 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is the CodeBadger review data plane.
+
+## Local CLI reviews
+
+`POST /api/local-review` runs the existing scanner and AI review pipeline on changes supplied by the CodeBadger CLI through the control plane. It does not require a pushed branch or a pull request and does not post comments to GitHub or Azure DevOps.
+
+The endpoint accepts only a fresh, project-specific HMAC signature covering the entire request body, using the existing `PROJECT_ID` and `WEBHOOK_SECRET`. Browser dashboard links cannot authorize it. Diffs and `.ai-review` rules are bounded; results are normalized and restricted to the submitted files. The control plane records the developer, run state, summary and issue counts separately from PR analytics. Deploy this update to each project before enabling CLI use. No additional provider keys are needed on developers' machines.
 
 ## Getting Started
 

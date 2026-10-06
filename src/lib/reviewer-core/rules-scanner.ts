@@ -622,10 +622,12 @@ export function parseUnifiedDiffFiles(diff) {
   for (const part of parts) {
     if (!part.startsWith("diff --git")) continue;
     let path;
-    const plus = part.match(/^\+\+\+ (?:b\/)?(\S+)/m);
+    const plus = part.match(/^\+\+\+ (?:b\/)?([^\r\n\t]+)/m);
     if (plus && plus[1] !== "/dev/null") path = plus[1];
+    const minus = part.match(/^--- (?:a\/)?([^\r\n\t]+)/m);
+    if (!path && minus && minus[1] !== "/dev/null") path = minus[1];
     if (!path) {
-      const head = part.match(/^diff --git a\/\S+ b\/(\S+)/m);
+      const head = part.match(/^diff --git a\/.+ b\/([^\r\n]+)/m);
       if (head) path = head[1];
     }
     out.push({ path: path || "(unknown)", diff: part });

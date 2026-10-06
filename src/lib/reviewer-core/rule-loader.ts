@@ -13,11 +13,13 @@ import { createHash } from "node:crypto";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { Platform, PlatformDetectionResult, DetectedPlatform } from "./platform-detector.ts";
 import { sanitizeUntrusted } from "./prompt-builder.ts";
+import { isProjectRulePath, MAX_PROJECT_RULE_FILES, MAX_PROJECT_RULE_FILE_BYTES, type ProjectRuleFile } from "./project-rules.ts";
 
 export const RULES_DIR = "rules";
 export const REPO_CONFIG_DIR = ".codebadger";
 /** Maximum characters of rule text injected into a prompt. */
 export const MAX_RULES_CHARS = 120_000;
+const MAX_PROJECT_RULES_CHARS = 30_000;
 
 export interface RepoReviewConfig {
   /** Platforms the repo declares (unioned with detected platforms). */
@@ -251,12 +253,14 @@ export function matchesAnyPath(globs: string[], changedFiles: string[]): boolean
  * @param changedFiles  Pull-request changed file paths — used for concern
  *   selection: an indexed instruction file is inlined only when its `applyTo`
  *   scope matches at least one changed file.
+ * @param projectRules  Files fetched from the reviewed repository at the PR or push revision.
  */
 export function loadRuleBundle(
   repoRoot: string,
   detection: PlatformDetectionResult,
   repoConfig?: RepoReviewConfig | null,
-  changedFiles: string[] = []
+  changedFiles: string[] = [],
+  projectRules: ProjectRuleFile[] = []
 ): RuleBundle {
   const seen = new Set<string>();
   const skipped: string[] = [];
@@ -337,6 +341,7 @@ export function loadRuleBundle(
   //    They never override system or security rules; enforced via boundary in
   //    the prompt builder.
   const repoBlocks: string[] = [];
+  let projectRuleChars = 0;
   if (repoConfig) {
     for (const f of repoConfig.include) {
       const display = `.codebadger/${f}`;
@@ -355,24 +360,48 @@ export function loadRuleBundle(
     }
   }
 
+  // Project rules come from the customer repository, never this deployment's
+  // filesystem. Built-in security and platform rules stay first in the bundle.
+  for (const file of projectRules
+    .filter((f) => isProjectRulePath(f.path))
+    .sort((a, b) => a.path.localeCompare(b.path))
+    .slice(0, MAX_PROJECT_RULE_FILES)) {
+    const display = file.path;
+    if (!file.content.trim() || Buffer.byteLength(file.content, "utf8") > MAX_PROJECT_RULE_FILE_BYTES) {
+      skipped.push(`${display} (empty or too large)`);
+      continue;
+    }
+    const content = sanitizeUntrusted(file.content).trim();
+    if (!content) { skipped.push(`${display} (empty after sanitization)`); continue; }
+    const hash = createHash("sha256").update(content).digest("hex");
+    if (seen.has(hash)) { skipped.push(`${display} (duplicate)`); continue; }
+    if (projectRuleChars + content.length > MAX_PROJECT_RULES_CHARS) {
+      skipped.push(`${display} (project rules budget exceeded)`);
+      continue;
+    }
+    seen.add(hash);
+    repoBlocks.push(`### Source: ${display}\n\n${content}`);
+    repoRuleFiles.push(display);
+    projectRuleChars += content.length;
+  }
+
   const fallbackUsed = detection.fallbackUsed;
   if (fallbackUsed) {
     addRule(join(repoRoot, RULES_DIR, "unknown", "rules.md"), "unknown/rules.md", commonBlocks);
   }
 
-  let text = [
-    commonBlocks.join("\n\n---\n\n"),
-    platformBlocks.length ? platformBlocks.join("\n\n---\n\n") : "",
-    repoBlocks.length ? repoBlocks.join("\n\n---\n\n") : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n---\n\n");
-
+  const separator = "\n\n---\n\n";
+  const commonText = commonBlocks.join(separator);
+  let platformText = platformBlocks.join(separator);
+  const repoText = repoBlocks.join(separator);
+  const fixedLength = commonText.length + repoText.length + (commonText ? separator.length : 0) + (repoText ? separator.length : 0);
   let truncated = false;
-  if (text.length > MAX_RULES_CHARS) {
-    text = `${text.slice(0, MAX_RULES_CHARS)}\n\n[TRUNCATED — rule corpus exceeded ${MAX_RULES_CHARS} characters]`;
+  if (fixedLength + platformText.length > MAX_RULES_CHARS) {
+    const available = Math.max(0, MAX_RULES_CHARS - fixedLength - 80);
+    platformText = `${platformText.slice(0, available)}\n\n[TRUNCATED — platform rules exceeded review budget]`;
     truncated = true;
   }
+  const text = [commonText, platformText, repoText].filter(Boolean).join(separator);
 
   console.log(
     `[rule-loader] loaded: common=[${commonRuleFiles.join(", ")}] platforms=[${platformRuleFiles.join(
