@@ -14,8 +14,7 @@ import { loadRuleBundle, loadRepositoryConfig, formatPlatforms, type RuleBundle 
 import { buildReviewPrompt } from "./prompt-builder";
 import { normalizeFindings } from "./findings";
 import type { ProjectRuleFile } from "./project-rules";
-
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.7-flash";
+import { withGeminiModel } from "./gemini-model";
 
 // ── AI provider chain ────────────────────────────────────────────────────────
 // Reviews try the primary provider (AI_PROVIDER, default gemini) first; if its
@@ -30,7 +29,6 @@ interface AiPrompt {
 }
 
 const PROVIDER_MODELS: Record<string, string> = {
-  gemini: process.env.GEMINI_MODEL || "gemini-3.6-flash",
   openai: process.env.OPENAI_MODEL || "gpt-4o",
   anthropic: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
   "azure-openai": process.env.AZURE_OPENAI_MODEL || "gpt-4o",
@@ -106,32 +104,34 @@ async function fetchWithRetries(
         `Free-tier keys have low per-minute/per-day limits — wait, reduce review frequency, or use a paid key. ${lastError.slice(0, 300)}`
     );
   }
-  throw new Error(`${provider} ${lastStatus}: ${lastError.slice(0, 500)}`);
+  throw Object.assign(new Error(`${provider} ${lastStatus}: ${lastError.slice(0, 500)}`), { status: lastStatus });
 }
 
 async function callProvider(name: string, p: AiPrompt): Promise<string> {
   switch (name) {
     case "gemini": {
-      const res = await fetchWithRetries(name, () =>
-        fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${PROVIDER_MODELS.gemini}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: p.system }] },
-              contents: [{ role: "user", parts: [{ text: p.user }] }],
-              generationConfig: {
-                temperature: 0.1,
-                maxOutputTokens: 8192,
-                responseMimeType: "application/json",
-              },
-            }),
-          }
-        )
-      );
-      const data = await res.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      return withGeminiModel(async (model) => {
+        const res = await fetchWithRetries(name, () =>
+          fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: p.system }] },
+                contents: [{ role: "user", parts: [{ text: p.user }] }],
+                generationConfig: {
+                  temperature: 0.1,
+                  maxOutputTokens: 8192,
+                  responseMimeType: "application/json",
+                },
+              }),
+            }
+          )
+        );
+        const data = await res.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      });
     }
     case "openai": {
       const res = await fetchWithRetries(name, () =>

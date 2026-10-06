@@ -2,6 +2,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { DEFAULT_GEMINI_MODEL } from './gemini-model';
 
 export async function loadConfig() {
   const configPath = join(process.cwd(), 'config.json');
@@ -10,7 +11,8 @@ export async function loadConfig() {
 
   // Env overrides so CI can flip provider/model without editing config.json
   const provider = (process.env.AI_REVIEW_PROVIDER || cfg.provider || 'gemini').toLowerCase();
-  const model = process.env.AI_REVIEW_MODEL || cfg.model?.[provider] || cfg.model?.gemini;
+  const model = process.env.AI_REVIEW_MODEL ||
+    (provider === 'gemini' ? process.env.GEMINI_MODEL || cfg.model?.gemini || DEFAULT_GEMINI_MODEL : cfg.model?.[provider] || cfg.model?.gemini);
 
   const envAutoUpdate = process.env.AI_REVIEW_AUTO_UPDATE_TITLE;
   const autoUpdatePrTitle =

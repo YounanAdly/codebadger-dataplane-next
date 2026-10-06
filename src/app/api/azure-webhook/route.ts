@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { scanDiff, parseUnifiedDiffFiles } from "@/lib/reviewer-core/rules-scanner";
 import { runAIReview } from "@/lib/reviewer-core/ai-review";
+import { withGeminiModel } from "@/lib/reviewer-core/gemini-model";
 import { reportRun, reportStructuredReview, reportPrState, checkProjectActive, getAzureDevOpsToken } from "@/lib/control-plane";
 import { diffStats, telemetryFindings } from "@/lib/review-telemetry";
 import {
@@ -278,19 +279,22 @@ style: update contact-us color tokens
 fix: resolve dashboard loading spinner
 i18n: add Arabic translations for login`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 60 },
-      }),
-    }
-  );
-  if (!res.ok) throw new Error(`Gemini title ${res.status}`);
-  const data = await res.json();
+  const data = await withGeminiModel(async (model) => {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          // Pro models need room for reasoning before producing the short title.
+          generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+        }),
+      }
+    );
+    if (!res.ok) throw Object.assign(new Error(`Gemini title ${res.status}: ${(await res.text()).slice(0, 500)}`), { status: res.status });
+    return res.json();
+  });
   const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "")
     .replace(/["`\n]/g, "")
     .trim();

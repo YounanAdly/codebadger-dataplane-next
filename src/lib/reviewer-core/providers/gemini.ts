@@ -2,6 +2,7 @@
 // Uses @google/generative-ai. Env: GEMINI_API_KEY.
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { DEFAULT_GEMINI_MODEL, withGeminiModel } from '../gemini-model';
 
 export class GeminiProvider {
   name: string;
@@ -17,21 +18,25 @@ export class GeminiProvider {
   }
 
   async review({ system, user, model, temperature, maxOutputTokens }: { system: string; user: string; model: string; temperature?: number; maxOutputTokens?: number }) {
-    const generative = this.client.getGenerativeModel({
-      model,
-      systemInstruction: system,
-      generationConfig: {
-        temperature,
-        maxOutputTokens,
-        responseMimeType: 'application/json',
-      },
-    });
+    const override = process.env.AI_REVIEW_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() ||
+      (model && model !== DEFAULT_GEMINI_MODEL ? model : undefined);
+    return withGeminiModel(async (selectedModel) => {
+      const generative = this.client.getGenerativeModel({
+        model: selectedModel,
+        systemInstruction: system,
+        generationConfig: {
+          temperature,
+          maxOutputTokens,
+          responseMimeType: 'application/json',
+        },
+      });
 
-    const result = await generative.generateContent({
-      contents: [{ role: 'user', parts: [{ text: user }] }],
-    });
+      const result = await generative.generateContent({
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+      });
 
-    const text = result.response.text();
-    return text;
+      const text = result.response.text();
+      return text;
+    }, override);
   }
 }
