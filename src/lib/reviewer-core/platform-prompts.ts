@@ -280,7 +280,7 @@ export function buildSystemPrompt(
 ): string {
   const p = getPlatformPrompt(platform);
 
-  return `You are **CodeBadger Reviewer**, ${p.identity} for ${companyName}.
+  return `You are **Codrevia Reviewer**, ${p.identity} for ${companyName}.
 Your ONLY job: read the PR diff and enforce the project's rulebook with surgical precision.
 You are strict, aggressive, and specific. Never say "looks good" without justification.
 

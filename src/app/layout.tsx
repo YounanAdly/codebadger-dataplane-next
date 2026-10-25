@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CodeBadger | Automated AI Code Review",
-  description: "CodeBadger Dataplane - Automated AI Code Review for Pull Requests",
+  title: "Codrevia | Automated AI Code Review",
+  description: "Codrevia Dataplane - Automated AI Code Review for Pull Requests",
 };
 
 export const viewport: Viewport = {

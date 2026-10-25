@@ -3,7 +3,8 @@
  * Rule loader for the platform-aware reviewer.
  *
  * Loads, in order: common rules, platform-specific rules (per detected
- * platform), and trusted repository configuration from `.codebadger/`.
+ * platform), and trusted repository configuration from `.codrevia/`
+ * (or the legacy `.codebadger/`).
  * Guarantees: no duplicate rule content in the final bundle, missing rule
  * files never crash the review, a maximum prompt size is enforced, and every
  * load/skip decision is logged (without logging file contents).
@@ -16,7 +17,9 @@ import { sanitizeUntrusted } from "./prompt-builder.ts";
 import { isProjectRulePath, MAX_PROJECT_RULE_FILES, MAX_PROJECT_RULE_FILE_BYTES, type ProjectRuleFile } from "./project-rules.ts";
 
 export const RULES_DIR = "rules";
-export const REPO_CONFIG_DIR = ".codebadger";
+export const REPO_CONFIG_DIR = ".codrevia";
+/** Pre-rebrand directory; still read when `.codrevia/` has no config. */
+export const LEGACY_REPO_CONFIG_DIR = ".codebadger";
 /** Maximum characters of rule text injected into a prompt. */
 export const MAX_RULES_CHARS = 120_000;
 const MAX_PROJECT_RULES_CHARS = 30_000;
@@ -26,10 +29,12 @@ export interface RepoReviewConfig {
   platforms: Platform[];
   severityThreshold: string;
   maxComments: number;
-  /** Repo rule files to include (relative to .codebadger/). */
+  /** Repo rule files to include (relative to the config directory). */
   include: string[];
   /** Rule file names to exclude (e.g. "generated-code.md", "react/rules.md"). */
   exclude: string[];
+  /** Config directory this was loaded from; defaults to REPO_CONFIG_DIR. */
+  configDir?: string;
 }
 
 export interface RuleBundle {
@@ -48,7 +53,7 @@ const PLATFORM_RULE_FILES: Record<string, string[]> = {
 };
 
 // ---------------------------------------------------------------------------
-// Repository configuration (.codebadger/review-config.yml)
+// Repository configuration (.codrevia/review-config.yml)
 // ---------------------------------------------------------------------------
 
 /**
@@ -117,16 +122,18 @@ const ALL_PLATFORM_SET = new Set<string>([
 ]);
 
 /**
- * Load `.codebadger/review-config.yml` from a repository checkout.
- * Returns null when the repo has no configuration.
+ * Load `.codrevia/review-config.yml` (or the legacy `.codebadger/`) from a
+ * repository checkout. Returns null when the repo has no configuration.
  */
 export function loadRepositoryConfig(repoRoot: string): RepoReviewConfig | null {
-  const p = join(repoRoot, REPO_CONFIG_DIR, "review-config.yml");
-  if (!existsSync(p)) return null;
+  const configDir = [REPO_CONFIG_DIR, LEGACY_REPO_CONFIG_DIR]
+    .find((dir) => existsSync(join(repoRoot, dir, "review-config.yml")));
+  if (!configDir) return null;
+  const p = join(repoRoot, configDir, "review-config.yml");
   try {
-    return parseReviewConfigYaml(readFileSync(p, "utf8"));
+    return { ...parseReviewConfigYaml(readFileSync(p, "utf8")), configDir };
   } catch (e: any) {
-    console.warn(`[rule-loader] failed to parse ${REPO_CONFIG_DIR}/review-config.yml — ignoring: ${e.message}`);
+    console.warn(`[rule-loader] failed to parse ${configDir}/review-config.yml — ignoring: ${e.message}`);
     return null;
   }
 }
@@ -247,9 +254,9 @@ export function matchesAnyPath(globs: string[], changedFiles: string[]): boolean
  * Load the full rule bundle for a review.
  *
  * @param repoRoot  Working directory containing the `rules/` tree and the
- *   `.github/instructions/` library (the CodeBadger deployment).
+ *   `.github/instructions/` library (the Codrevia deployment).
  * @param detection  Result of platform detection.
- * @param repoConfig  Optional `.codebadger` configuration of the reviewed repo.
+ * @param repoConfig  Optional `.codrevia` (or legacy `.codebadger`) configuration of the reviewed repo.
  * @param changedFiles  Pull-request changed file paths — used for concern
  *   selection: an indexed instruction file is inlined only when its `applyTo`
  *   scope matches at least one changed file.
@@ -285,7 +292,7 @@ export function loadRuleBundle(
     }
     seen.add(hash);
     // Repository rule files are untrusted: strip prompt-injection attempts.
-    blocks.push(`### Source: ${display}\n\n${(display.startsWith(".codebadger/") ? sanitizeUntrusted(content) : content).trim()}`);
+    blocks.push(`### Source: ${display}\n\n${(display.startsWith(`${REPO_CONFIG_DIR}/`) || display.startsWith(`${LEGACY_REPO_CONFIG_DIR}/`) ? sanitizeUntrusted(content) : content).trim()}`);
   };
 
   // 1. Common rules — always loaded, never excluded.
@@ -337,18 +344,19 @@ export function loadRuleBundle(
     }
   }
 
-  // 3. Repository rules — trusted additional guidance from .codebadger/.
+  // 3. Repository rules — trusted additional guidance from .codrevia/ (or legacy .codebadger/).
   //    They never override system or security rules; enforced via boundary in
   //    the prompt builder.
   const repoBlocks: string[] = [];
   let projectRuleChars = 0;
   if (repoConfig) {
+    const configDir = repoConfig.configDir ?? REPO_CONFIG_DIR;
     for (const f of repoConfig.include) {
-      const display = `.codebadger/${f}`;
+      const display = `${configDir}/${f}`;
       const path = confinedRuleFile(
         repoRoot,
-        join(repoRoot, REPO_CONFIG_DIR),
-        resolve(repoRoot, REPO_CONFIG_DIR, f)
+        join(repoRoot, configDir),
+        resolve(repoRoot, configDir, f)
       );
       if (!path) {
         skipped.push(`${display} (missing or outside repository rules)`);

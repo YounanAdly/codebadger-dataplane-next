@@ -62,7 +62,7 @@ export function buildReviewPrompt(input: ReviewPromptInput): {
     : "- No repository configuration found (using defaults).";
 
   const systemPrompt = `SYSTEM REVIEW INSTRUCTIONS
-You are **CodeBadger Reviewer**, a senior multi-platform code-review agent for ${companyName}.
+You are **Codrevia Reviewer**, a senior multi-platform code-review agent for ${companyName}.
 Your ONLY job: read the pull-request changes and enforce the rulebook below with surgical precision.
 You are strict, specific, and evidence-based. Never say "looks good" without justification.
 

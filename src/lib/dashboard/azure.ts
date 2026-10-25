@@ -6,11 +6,7 @@
 // resolved through the Control Plane credentials endpoint.
 
 import { getAzureDevOpsToken } from "@/lib/control-plane";
-import {
-  SUMMARY_MARKER,
-  LEGACY_SUMMARY_MARKER,
-  FINGERPRINT_REGEX,
-} from "@/lib/branding";
+import { FINGERPRINT_REGEX, isSummaryComment } from "@/lib/branding";
 
 const API_VERSION = "7.1-preview.1";
 
@@ -56,7 +52,7 @@ async function ado<T = any>(
     headers: {
       accept: "application/json",
       authorization: ctx.authHeader,
-      "user-agent": "CodeBadger-Dataplane-Dashboard",
+      "user-agent": "Codrevia-Dataplane-Dashboard",
       ...(init.body ? { "content-type": "application/json" } : {}),
       ...(init.headers || {}),
     },
@@ -103,10 +99,10 @@ function findingsCount(body: string): number {
 }
 
 function hasBotMarker(body: string): boolean {
-  return body.includes(SUMMARY_MARKER) || body.includes(LEGACY_SUMMARY_MARKER);
+  return isSummaryComment(body);
 }
 
-/** Recent PRs with CodeBadger review verdicts (threads summary comment). */
+/** Recent PRs with Codrevia review verdicts (threads summary comment). */
 export async function listAzurePullRequests(
   ctx: AzureDashboardContext,
   limit = 25
@@ -177,7 +173,7 @@ export interface AzurePrDetail {
   findings: AzureFinding[];
 }
 
-/** One PR + its CodeBadger summary comment and inline findings. */
+/** One PR + its Codrevia summary comment and inline findings. */
 export async function getAzurePullRequestDetail(
   ctx: AzureDashboardContext,
   prId: number
@@ -214,7 +210,7 @@ export async function getAzurePullRequestDetail(
           .replace(/—.*/, "")
           .replace(/\*\*(?:CRITICAL|HIGH|MEDIUM|LOW|INFO)\*\*/gi, "")
           .replace(/📖 _.+?_/g, "")
-          .replace(/🦡 _.+?_/g, "")
+          .replace(/(?:🦡|🛡️) _.+?_/g, "")
           .replace(/<!--.*?-->/g, "")
           .replace(/\n{2,}/g, "\n")
           .trim();

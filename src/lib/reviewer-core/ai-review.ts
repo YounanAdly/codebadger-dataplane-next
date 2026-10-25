@@ -7,7 +7,7 @@
  * rules → load trusted repository configuration → build the review prompt →
  * call the AI → validate and normalize findings → return for publishing.
  */
-import { COMPANY_NAME, CODEBADGER_LOGO_URL, BOT_NAME } from "@/lib/branding";
+import { COMPANY_NAME, LOGO_URL, BOT_NAME } from "@/lib/branding";
 import { scanDiff, parseUnifiedDiffFiles } from "./rules-scanner";
 import { detectPlatforms, extractFilePaths, isGeneratedFile, type Platform, type DetectedPlatform } from "./platform-detector";
 import { loadRuleBundle, loadRepositoryConfig, formatPlatforms, type RuleBundle } from "./rule-loader";
@@ -336,7 +336,7 @@ export async function executeReview({
     : aiResult.platform || "unknown";
 
   const summaryMd = [
-    `## <img src="${CODEBADGER_LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
+    `## <img src="${LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
     "",
     ({
       approve: "✅ **Approve** — no blocking issues.",

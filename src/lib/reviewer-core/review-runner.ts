@@ -2,7 +2,7 @@
 // computes the verdict client-side (never trusts the model to decide fail/pass),
 // and renders comments with ```suggestion blocks for the native Apply button.
 
-import { CODEBADGER_LOGO_URL, COMPANY_NAME, BOT_NAME, isValidSuggestion } from '@/lib/branding';
+import { LOGO_URL, COMPANY_NAME, BOT_NAME, isValidSuggestion } from '@/lib/branding';
 
 const SEVERITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEVERITY_ICON: Record<string, string> = {
@@ -14,7 +14,7 @@ const SEVERITY_ICON: Record<string, string> = {
 };
 const SOURCE_ICON: Record<string, string> = {
   scanner: '🔍',
-  ai: '🦡',
+  ai: '🛡️',
 };
 
 export async function runReview({ cfg, provider, systemPrompt, userPrompt }: { cfg: any; provider: any; systemPrompt: string; userPrompt: string }) {
@@ -94,7 +94,7 @@ function slugify(s: string) {
 
 function renderCommentBody(f: any) {
   const sevIcon = SEVERITY_ICON[f.severity] || '•';
-  const srcIcon = SOURCE_ICON[f.source] || '🦡';
+  const srcIcon = SOURCE_ICON[f.source] || '🛡️';
   const parts = [
     `${sevIcon} **${(f.severity || 'info').toUpperCase()} · ${f.category || 'rule'}** — ${f.title}`,
     '',
@@ -105,7 +105,7 @@ function renderCommentBody(f: any) {
     parts.push('', '```suggestion', f.suggestion, '```');
   }
   parts.push('', `${srcIcon} _${f.source === 'scanner' ? 'Deterministic rules scanner' : 'AI reviewer'} — ${BOT_NAME}_`);
-  parts.push(`<!-- codebadger-ai-review-fp:${fingerprintOf(f)} -->`);
+  parts.push(`<!-- codrevia-ai-review-fp:${fingerprintOf(f)} -->`);
   return parts.join('\n');
 }
 
@@ -135,10 +135,10 @@ export function renderSummary({ summary, findings, verdict, provider, model }: {
       .map(([sev, n]) => `${SEVERITY_ICON[sev] || '•'} ${n} ${sev}`)
       .join(' · ') || '✨ No findings.';
 
-  const sourceLine = `🔍 Deterministic scan: ${bySource.scanner} · 🦡 AI review: ${bySource.ai}`;
+  const sourceLine = `🔍 Deterministic scan: ${bySource.scanner} · 🛡️ AI review: ${bySource.ai}`;
 
   return [
-    `## <img src="${CODEBADGER_LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
+    `## <img src="${LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
     ``,
     verdictLabel,
     ``,

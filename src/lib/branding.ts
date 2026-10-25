@@ -1,28 +1,46 @@
-// Branding configuration for CodeBadger AI Review
+// Branding configuration for Codrevia AI Review
 
-export const COMPANY_NAME = 'CodeBadger';
-export const BOT_NAME = 'CodeBadger AI Review';
-export const BOT_ROLE = 'CodeBadger Reviewer';
+export const COMPANY_NAME = 'Codrevia';
+export const BOT_NAME = 'Codrevia AI Review';
+export const BOT_ROLE = 'Codrevia Reviewer';
 
 // Fallback logo URL (hosted on GitHub raw repo or custom domain/CDN)
-export const CODEBADGER_LOGO_URL =
-  process.env.CODEBADGER_LOGO_URL ||
+export const LOGO_URL =
+  process.env.CODREVIA_LOGO_URL ||
   (process.env.DATAPLANE_URL
-    ? `${process.env.DATAPLANE_URL.replace(/\/$/, '')}/codebadger-logo.jpg`
-    : 'https://raw.githubusercontent.com/YounanAdly/codebadger-dataplane-next/main/public/codebadger-logo.jpg');
+    ? `${process.env.DATAPLANE_URL.replace(/\/$/, '')}/codrevia-logo.png`
+    : 'https://raw.githubusercontent.com/YounanAdly/codebadger-dataplane-next/main/public/codrevia-logo.png');
 
-export const SUMMARY_MARKER = '<!-- codebadger-ai-review-summary -->';
+export const SUMMARY_MARKER = '<!-- codrevia-ai-review-summary -->';
 export const LEGACY_SUMMARY_MARKER = '<!-- marafiq-ai-review-summary -->';
+// Comments posted before the rebrand keep these markers and footers; they must stay recognised.
+const PRE_REBRAND_SUMMARY_MARKER = '<!-- codebadger-ai-review-summary -->';
+const PRE_REBRAND_BOT_NAME = 'CodeBadger AI Review';
+const PRE_REBRAND_BOT_ROLE = 'CodeBadger Reviewer';
+const PRE_REBRAND_COMPANY_NAME = 'CodeBadger';
 
-export const FINGERPRINT_REGEX = /<!-- (?:codebadger|marafiq)-ai-review-fp:([^\s>]+) -->/;
+export const FINGERPRINT_REGEX = /<!-- (?:codrevia|codebadger|marafiq)-ai-review-fp:([^\s>]+) -->/;
 
 export function isSummaryComment(body?: string): boolean {
   if (!body) return false;
-  return body.includes(SUMMARY_MARKER) || body.includes(LEGACY_SUMMARY_MARKER);
+  return [SUMMARY_MARKER, PRE_REBRAND_SUMMARY_MARKER, LEGACY_SUMMARY_MARKER].some((marker) => body.includes(marker));
+}
+
+const BOT_FOOTERS = [
+  `AI reviewer — ${BOT_NAME}`,
+  `AI reviewer — ${PRE_REBRAND_BOT_NAME}`,
+  `${BOT_ROLE} — ${COMPANY_NAME}`,
+  `${PRE_REBRAND_BOT_ROLE} — ${PRE_REBRAND_COMPANY_NAME}`,
+];
+
+/** True when the text carries a footer written by this bot, before or after the rebrand. */
+export function hasBotFooter(text?: string): boolean {
+  if (!text) return false;
+  return BOT_FOOTERS.some((footer) => text.includes(footer));
 }
 
 export function formatLogoBadge(size: number = 28): string {
-  return `<img src="${CODEBADGER_LOGO_URL}" width="${size}" height="${size}" alt="${COMPANY_NAME}" align="absmiddle" />`;
+  return `<img src="${LOGO_URL}" width="${size}" height="${size}" alt="${COMPANY_NAME}" align="absmiddle" />`;
 }
 
 /**

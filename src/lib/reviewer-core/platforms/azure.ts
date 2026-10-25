@@ -1,10 +1,10 @@
 import {
   SUMMARY_MARKER,
-  LEGACY_SUMMARY_MARKER,
   FINGERPRINT_REGEX,
-  CODEBADGER_LOGO_URL,
+  LOGO_URL,
   COMPANY_NAME,
   BOT_NAME,
+  isSummaryComment,
 } from '@/lib/branding';
 
 const API_VERSION = '7.1-preview.1';
@@ -70,14 +70,14 @@ export class AzurePlatform {
 
   async postSummary(markdown: string) {
     const marker = SUMMARY_MARKER;
-    const body = `${marker}\n<img src="${CODEBADGER_LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> **${BOT_NAME}**\n\n${markdown}`;
+    const body = `${marker}\n<img src="${LOGO_URL}" width="28" height="28" alt="${COMPANY_NAME}" align="absmiddle" /> **${BOT_NAME}**\n\n${markdown}`;
 
     try {
       const threads = await this.#listAllThreads();
       for (const t of threads) {
         const first = (t.comments || [])[0];
         const text = first?.content || '';
-        if (first && (text.includes(SUMMARY_MARKER) || text.includes(LEGACY_SUMMARY_MARKER))) {
+        if (first && isSummaryComment(text)) {
           await this.#ado(
             `/pullRequests/${this.prId}/threads/${t.id}/comments/${first.id}`,
             {

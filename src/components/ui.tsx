@@ -1,6 +1,6 @@
 // src/components/ui.tsx
 /**
- * CodeBadger dashboard primitives — one visual language for every page.
+ * Codrevia dashboard primitives — one visual language for every page.
  * Server-component safe: pure markup + CSS transitions, no client JS.
  */
 import Link from "next/link";
@@ -232,7 +232,7 @@ const NAV = [
 function Logo({ className = "h-8 w-8" }: IconProps) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/codebadger-logo.jpg" alt="CodeBadger" className={`${className} rounded-lg object-cover ring-1 ring-line`} />
+    <img src="/codrevia-icon.png" alt="Codrevia" className={`${className} rounded-lg object-cover ring-1 ring-line`} />
   );
 }
 
@@ -256,7 +256,7 @@ export function AppShell({
       {/* Mobile top bar */}
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-line-subtle bg-canvas/90 px-4 py-3 backdrop-blur lg:hidden">
         <Logo className="h-7 w-7" />
-        <span className="text-sm font-semibold tracking-tight">CodeBadger</span>
+        <span className="text-sm font-semibold tracking-tight">Codrevia</span>
         <span className="ml-auto truncate rounded-md border border-line-subtle bg-raised px-2 py-1 font-mono text-[11px] text-fg-3" title={`${owner}/${repo}`}>
           {owner}/{repo}
         </span>
@@ -282,7 +282,7 @@ export function AppShell({
         <Link href="/" className="mb-6 flex items-center gap-2.5 rounded-lg px-1 py-1 transition-opacity duration-150 hover:opacity-90">
           <Logo />
           <div className="leading-tight">
-            <div className="text-sm font-semibold tracking-tight">CodeBadger</div>
+            <div className="text-sm font-semibold tracking-tight">Codrevia</div>
             <div className="text-[11px] text-fg-3">AI Review Dataplane</div>
           </div>
         </Link>

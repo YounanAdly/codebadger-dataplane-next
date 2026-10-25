@@ -1,4 +1,4 @@
-// CodeBadger AI Review Core Engine
+// Codrevia AI Review Core Engine
 
 export { loadConfig } from './config';
 export { collectDiff } from './diff';

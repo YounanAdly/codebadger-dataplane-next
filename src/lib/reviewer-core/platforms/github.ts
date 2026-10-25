@@ -1,7 +1,7 @@
 // GitHub Actions platform adapter.
 
 import { readFile } from 'node:fs/promises';
-import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from '@/lib/branding';
+import { SUMMARY_MARKER, FINGERPRINT_REGEX, isSummaryComment } from '@/lib/branding';
 import { getGithubToken, isControlPlaneReportingEnabled } from '@/lib/control-plane';
 
 const API = 'https://api.github.com';
@@ -32,7 +32,7 @@ export class GitHubPlatform {
         accept: 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28',
         authorization: `Bearer ${token}`,
-        'user-agent': 'codebadger-ai-review',
+        'user-agent': 'codrevia-ai-review',
         ...(init.body ? { 'content-type': 'application/json' } : {}),
         ...(init.headers || {}),
       },
@@ -68,10 +68,7 @@ export class GitHubPlatform {
     const existing = await this.#gh(
       `/repos/${this.repo}/issues/${prNumber}/comments?per_page=100`,
     );
-    const mine = (existing || []).find((c: any) => {
-      const text = c.body || '';
-      return text.includes(SUMMARY_MARKER) || text.includes(LEGACY_SUMMARY_MARKER);
-    });
+    const mine = (existing || []).find((c: any) => isSummaryComment(c.body || ''));
     if (mine) {
       await this.#gh(`/repos/${this.repo}/issues/comments/${mine.id}`, {
         method: 'PATCH',

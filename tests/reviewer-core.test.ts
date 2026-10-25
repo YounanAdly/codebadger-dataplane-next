@@ -290,6 +290,25 @@ rules:
     }
   });
 
+  test("loads repository rules from .codrevia and prefers it over .codebadger", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cb-repo-"));
+    try {
+      for (const [name, rule] of [[".codrevia", "New directory rule."], [".codebadger", "Legacy directory rule."]]) {
+        mkdirSync(join(dir, name), { recursive: true });
+        writeFileSync(join(dir, name, "review-config.yml"), "rules:\n  include:\n    - architecture.md\n");
+        writeFileSync(join(dir, name, "architecture.md"), `# Architecture\n\n${rule}\n`);
+      }
+      const cfg = loadRepositoryConfig(dir);
+      assert.ok(cfg);
+      const bundle = loadRuleBundle(dir, detectPlatforms(["lib/main.dart"]), cfg);
+      assert.deepEqual(bundle.repoRuleFiles, [".codrevia/architecture.md"]);
+      assert.ok(bundle.text.includes("New directory rule."));
+      assert.ok(!bundle.text.includes("Legacy directory rule."));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("rejects repository rule paths outside .codebadger", () => {
     const dir = mkdtempSync(join(tmpdir(), "cb-repo-"));
     try {

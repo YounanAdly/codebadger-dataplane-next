@@ -6,7 +6,7 @@ import Link from "next/link";
 import { SyntaxCode } from "@/components/syntax-code";
 import { cookies } from "next/headers";
 import { makeOctokit } from "@/lib/providers/github";
-import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER, FINGERPRINT_REGEX } from "@/lib/branding";
+import { isSummaryComment, FINGERPRINT_REGEX } from "@/lib/branding";
 import { getAzureDashboardContext } from "@/lib/dashboard/azure";
 import AzurePrDetail from "./azure-detail";
 import { dashboardLinkQuery } from "@/lib/dashboard-auth";
@@ -98,9 +98,7 @@ export default async function PRDetailPage({
   let botSummary: { body: string } | null = null;
   try {
     const { data: comments } = await octokit.rest.issues.listComments({ owner, repo, issue_number: prNum, per_page: 100 });
-    const found = comments.find(
-      (c) => (c.body || "").includes(SUMMARY_MARKER) || (c.body || "").includes(LEGACY_SUMMARY_MARKER)
-    );
+    const found = comments.find((c) => isSummaryComment(c.body || ""));
     if (found) botSummary = { body: found.body || "" };
   } catch { /* skip */ }
 
@@ -115,7 +113,7 @@ export default async function PRDetailPage({
       const severity = sevChar === "🛑" ? "critical" : sevChar === "⚠️" ? "high" : sevChar === "🟡" ? "medium" : sevChar === "🔵" ? "low" : "info";
       const title = body.match(/—\s*(.+?)(?:\n|$)/)?.[1]?.trim() || "Finding";
       let explanation = body.replace(/[🛑⚠️🟡🔵ℹ️]/g, "").replace(/—.*/, "").replace(/\*\*(?:CRITICAL|HIGH|MEDIUM|LOW|INFO)\*\*/gi, "")
-        .replace(/📖 _.+?_/g, "").replace(/🦡 _.+?_/g, "").replace(/<!--.*?-->/g, "").replace(/\n{2,}/g, "\n").trim();
+        .replace(/📖 _.+?_/g, "").replace(/(?:🦡|🛡️) _.+?_/g, "").replace(/<!--.*?-->/g, "").replace(/\n{2,}/g, "\n").trim();
       explanation = explanation.split("```suggestion")[0].trim();
       const suggestion = body.match(/```suggestion\s*([\s\S]*?)```/)?.[1]?.trim() || null;
       findings.push({ severity, title, explanation: explanation || title, suggestion, path: (c.path || "").replace(/^\//, ""), line: c.position || c.original_line || 0 });

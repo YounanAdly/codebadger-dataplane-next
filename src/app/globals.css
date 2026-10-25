@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------
-   CodeBadger design tokens
+   Codrevia design tokens
    Identity: near-black canvas · graphite surfaces · off-white text
-   · controlled vivid red accent (from the badger mark)
+   · controlled vivid red accent (from the review-node mark)
    ------------------------------------------------------------------ */
 
 :root {

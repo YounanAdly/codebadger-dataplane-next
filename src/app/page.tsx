@@ -7,8 +7,8 @@ export default function Home() {
       <main className="flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-8 px-6 py-16 text-center mx-auto">
         <div className="cb-fade-up relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_16px_48px_-16px_rgba(0,0,0,0.8)]">
           <Image
-            src="/codebadger-logo.jpg"
-            alt="CodeBadger Logo"
+            src="/codrevia-icon.png"
+            alt="Codrevia Logo"
             width={112}
             height={112}
             className="object-cover"
@@ -18,7 +18,7 @@ export default function Home() {
 
         <div className="cb-fade-up flex flex-col items-center gap-3" style={{ animationDelay: "60ms" }}>
           <h1 className="text-4xl font-semibold tracking-tight text-fg">
-            CodeBadger
+            Codrevia
           </h1>
           <p className="max-w-md text-lg leading-relaxed text-fg-3">
             Automated, high-precision AI code reviews for GitHub and Azure DevOps pull requests.
@@ -54,7 +54,7 @@ export default function Home() {
         </div>
 
         <p className="cb-fade-in text-xs text-fg-3" style={{ animationDelay: "200ms" }}>
-          Powered by CodeBadger AI Review Engine
+          Powered by Codrevia AI Review Engine
         </p>
       </main>
     </div>

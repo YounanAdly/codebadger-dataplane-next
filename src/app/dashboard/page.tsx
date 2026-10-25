@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { makeOctokit } from "@/lib/providers/github";
-import { SUMMARY_MARKER, LEGACY_SUMMARY_MARKER } from "@/lib/branding";
+import { isSummaryComment } from "@/lib/branding";
 import {
   getAzureDashboardContext,
   listAzurePullRequests,
@@ -99,7 +99,7 @@ export default async function DashboardPage({
           <h1 className="mb-2 text-lg font-semibold text-accent">Dataplane not configured</h1>
           <p className="text-sm text-fg-3">
             No repository is connected to this deployment — connect one from the
-            CodeBadger platform to enable the dashboard.
+            Codrevia platform to enable the dashboard.
           </p>
         </div>
       </div>
@@ -136,9 +136,7 @@ export default async function DashboardPage({
         const { data: comments } = await octokit.rest.issues.listComments({
           owner, repo, issue_number: pr.number, per_page: 100,
         });
-        const bot = comments.find(
-          (c) => (c.body || "").includes(SUMMARY_MARKER) || (c.body || "").includes(LEGACY_SUMMARY_MARKER)
-        );
+        const bot = comments.find((c) => isSummaryComment(c.body || ""));
         if (bot) {
           verdict = verdictFromBody(bot.body || "");
           count = findingsCount(bot.body || "");

@@ -8,8 +8,9 @@ import { Octokit } from "@octokit/rest";
 import {
   BOT_NAME,
   SUMMARY_MARKER,
-  LEGACY_SUMMARY_MARKER,
   FINGERPRINT_REGEX,
+  hasBotFooter,
+  isSummaryComment,
   isValidSuggestion,
 } from "@/lib/branding";
 import { getGithubToken } from "@/lib/control-plane";
@@ -28,7 +29,7 @@ export async function makeOctokit(): Promise<Octokit> {
 
 function isBotInlineComment(body?: string): boolean {
   if (!body) return false;
-  return FINGERPRINT_REGEX.test(body) || body.includes(`AI reviewer — ${BOT_NAME}`);
+  return FINGERPRINT_REGEX.test(body) || hasBotFooter(body);
 }
 
 // ── Comment rendering ──
@@ -52,8 +53,8 @@ export function renderComment(f: any): string {
   if (f.suggestion && isValidSuggestion(f.suggestion, f.file)) {
     parts.push("", "```suggestion", f.suggestion, "```");
   }
-  parts.push("", `🦡 _AI reviewer — ${BOT_NAME}_`);
-  parts.push(`<!-- codebadger-ai-review-fp:${fingerprintOf(f)} -->`);
+  parts.push("", `🛡️ _AI reviewer — ${BOT_NAME}_`);
+  parts.push(`<!-- codrevia-ai-review-fp:${fingerprintOf(f)} -->`);
   return parts.join("\n");
 }
 
@@ -111,10 +112,7 @@ export async function postSummary(
     issue_number: prNumber,
     per_page: 100,
   });
-  const mine = comments.find((c: any) => {
-    const text = c.body || "";
-    return text.includes(SUMMARY_MARKER) || text.includes(LEGACY_SUMMARY_MARKER);
-  });
+  const mine = comments.find((c: any) => isSummaryComment(c.body || ""));
   if (mine) {
     await octokit.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
   } else {

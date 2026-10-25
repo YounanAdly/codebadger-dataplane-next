@@ -15,7 +15,7 @@ export function AccessDeniedView() {
         <h1 className="mb-2 text-lg font-semibold text-fg">Access required</h1>
         <p className="text-sm text-fg-3">
           This dashboard is private. Open it from your project page on the
-          CodeBadger platform — the link is generated for signed-in members of
+          Codrevia platform — the link is generated for signed-in members of
           the project&apos;s company and expires shortly after.
         </p>
         <Link

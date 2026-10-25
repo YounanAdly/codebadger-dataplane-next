@@ -9,10 +9,11 @@ import {
   COMPANY_NAME,
   BOT_NAME,
   BOT_ROLE,
-  CODEBADGER_LOGO_URL,
+  LOGO_URL,
   SUMMARY_MARKER,
-  LEGACY_SUMMARY_MARKER,
   FINGERPRINT_REGEX,
+  hasBotFooter,
+  isSummaryComment,
   isValidSuggestion,
 } from "@/lib/branding";
 import { fingerprintOf } from "@/lib/reviewer-core/review-runner";
@@ -50,24 +51,24 @@ function renderComment(f: any) {
   if (f.suggestion && isValidSuggestion(f.suggestion, f.file)) {
     parts.push(``, `**Suggested fix:**`, "```suggestion", f.suggestion, "```");
   }
-  parts.push(``, `---`, `<sub>🦡 ${BOT_ROLE} — ${COMPANY_NAME}</sub>`);
-  parts.push(`<!-- codebadger-ai-review-fp:${fingerprintOf(f)} -->`);
+  parts.push(``, `---`, `<sub>🛡️ ${BOT_ROLE} — ${COMPANY_NAME}</sub>`);
+  parts.push(`<!-- codrevia-ai-review-fp:${fingerprintOf(f)} -->`);
   return parts.join("\n");
 }
 
 /** Recognizes inline finding threads previously posted by the bot. */
 function isBotInlineContent(content?: string) {
   if (!content) return false;
-  return FINGERPRINT_REGEX.test(content) || content.includes(`${BOT_ROLE} — ${COMPANY_NAME}`);
+  return FINGERPRINT_REGEX.test(content) || hasBotFooter(content);
 }
 
 /** Recognizes the bot's summary thread (new marker or legacy pre-marker body). */
 function isSummaryContent(content?: string) {
   if (!content) return false;
   return (
-    content.includes(SUMMARY_MARKER) ||
-    content.includes(LEGACY_SUMMARY_MARKER) ||
-    content.includes(`Reviewed by **${COMPANY_NAME}**`)
+    isSummaryComment(content) ||
+    content.includes(`Reviewed by **${COMPANY_NAME}**`) ||
+    content.includes("Reviewed by **CodeBadger**") // posted before the rebrand
   );
 }
 
@@ -332,7 +333,7 @@ function branchNameHelp(branch: string) {
     ``,
     `Please rename your branch and re-open the PR.`,
     ``,
-    `🦡 _${BOT_NAME} — branch policy_`,
+    `🛡️ _${BOT_NAME} — branch policy_`,
   ].join("\n");
 }
 
@@ -382,7 +383,7 @@ function offScopeWarning(branch: string, offScope: string[]) {
     ``,
     `If these changes are intentional, ignore this warning. Otherwise, move them to their own branch.`,
     ``,
-    `🦡 _${BOT_NAME} — scope policy_`,
+    `🛡️ _${BOT_NAME} — scope policy_`,
   ].join("\n");
 }
 
@@ -480,7 +481,7 @@ export async function POST(req: NextRequest) {
   try {
     await setPrStatus(project, repoId, prId, {
       state: "pending",
-      description: `🦡 ${BOT_NAME} — running…`,
+      description: `🛡️ ${BOT_NAME} — running…`,
     });
 
     if (eventType === "git.pullrequest.created") {
@@ -589,7 +590,7 @@ export async function POST(req: NextRequest) {
     } as Record<string, string>)[verdict];
 
     const summaryLines = [
-      `# <img src="${CODEBADGER_LOGO_URL}" width="32" height="32" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
+      `# <img src="${LOGO_URL}" width="32" height="32" alt="${COMPANY_NAME}" align="absmiddle" /> ${BOT_NAME}`,
       ``,
       verdictBanner,
       ``,
