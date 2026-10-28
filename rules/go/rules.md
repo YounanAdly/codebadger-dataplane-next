@@ -1,6 +1,21 @@
 # Go Review Rules
 
-Apply when the pull request touches Go code: `.go` files, `go.mod`.
+Platform detection signals: `go.mod`, `go.sum`, `.go` files.
+
+This file is the **loading index** for Go review rules. The rule loader reads the
+`## Instruction files` section below and inlines every referenced instruction file whose
+`applyTo` scope matches the pull request's changed files. The baseline rules below always load.
+
+## Instruction files
+
+Independent, self-contained instruction packages under `.github/instructions/go/`:
+
+- .github/instructions/go/go.instructions.md — language correctness: error wrapping/comparison, context flow, defer placement, struct tags
+- .github/instructions/go/concurrency.instructions.md — goroutine leaks, channel ownership/closing, data races, lock discipline
+- .github/instructions/go/http-services.instructions.md — net/http services: server timeouts, bounded bodies, outbound client timeouts, safe errors
+- .github/instructions/go/testing.instructions.md — table-driven deterministic tests with the project's helpers
+
+## Baseline rules (always loaded)
 
 1. Check every returned `error`; never discard with `_` unless explicitly justified.
 2. Wrap errors with `%w` to preserve the chain; don't string-match error text.

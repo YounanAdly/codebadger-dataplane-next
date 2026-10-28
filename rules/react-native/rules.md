@@ -13,7 +13,7 @@ Apply when the pull request touches React Native code: `package.json` with `reac
 9. Permissions: request only what the feature needs; declare exactly what is used in Android/iOS manifests.
 10. Navigation: use the project's navigator consistently; deep links must validate parameters.
 11. Accessibility: `accessibilityLabel` on interactive elements, `accessible` props, minimum touch targets (44pt/48dp).
-12. Test: Jest + React Native Testing Library for components and logic.
+12. Test with the project's existing stack (Jest + React Native Testing Library where used).
 
 Severity guide:
 - **critical**: secrets in bundle, unencrypted sensitive storage, missing permission justification, crashes from native module misuse.

@@ -1,6 +1,20 @@
 # Ruby Review Rules
 
-Apply when the pull request touches Ruby code: `.rb` files, `Gemfile`.
+Platform detection signals: `Gemfile`, `.rb` files, `.rubocop.yml`.
+
+This file is the **loading index** for Ruby review rules. The rule loader reads the
+`## Instruction files` section below and inlines every referenced instruction file whose
+`applyTo` scope matches the pull request's changed files. The baseline rules below always load.
+
+## Instruction files
+
+Independent, self-contained instruction packages under `.github/instructions/ruby/`:
+
+- .github/instructions/ruby/ruby.instructions.md — language correctness: exceptions, dynamic dispatch, mutation of shared state, coercion traps
+- .github/instructions/ruby/rails.instructions.md — Rails: authorization, strong parameters, ActiveRecord N+1, jobs, migrations
+- .github/instructions/ruby/testing.instructions.md — RSpec/Minitest behavior assertions with the project's stack
+
+## Baseline rules (always loaded)
 
 1. Never interpolate user input into SQL/ARel — use parameterized queries or ActiveRecord predicates.
 2. Escape output in views; never mark user input `html_safe`.
@@ -14,7 +28,7 @@ Apply when the pull request touches Ruby code: `.rb` files, `Gemfile`.
 10. File handling: sanitize paths, validate upload types, don't trust filenames.
 11. Follow Ruby style guide (RuboCop) and Rails conventions (skinny controllers, models as data+behavior).
 12. Migrations: reversible, add indexes for new foreign keys, no data destruction without a plan.
-13. Test: RSpec/Minitest for new logic; cover authorization and error paths.
+13. Test with the project's existing framework (RSpec/Minitest); cover authorization and error paths.
 
 Severity guide:
 - **critical**: SQL injection, XSS via `html_safe`, hardcoded secrets, unsafe deserialization, missing auth.

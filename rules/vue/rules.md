@@ -1,6 +1,20 @@
 # Vue Review Rules
 
-Apply when the pull request touches Vue code: `.vue` files, `vue.config.js`, `vite.config.*`, `package.json` with `vue`.
+Platform detection signals: `.vue` files, `vue.config.js`, `nuxt.config.*`, `package.json` with `vue`.
+
+This file is the **loading index** for Vue review rules. The rule loader reads the
+`## Instruction files` section below and inlines every referenced instruction file whose
+`applyTo` scope matches the pull request's changed files. The baseline rules below always load.
+
+## Instruction files
+
+Independent, self-contained instruction packages under `.github/instructions/vue/`:
+
+- .github/instructions/vue/vue.instructions.md — SFC correctness: reactivity loss via destructuring, v-for keys, v-html, watchers, lifecycle symmetry
+- .github/instructions/vue/state-management.instructions.md — store consistency (Pinia/Vuex/composables), storeToRefs, shared-composable scope, fetch races
+- .github/instructions/vue/testing.instructions.md — Vue Test Utils behavior assertions with the project's stack
+
+## Baseline rules (always loaded)
 
 1. Never use `v-html` without sanitization.
 2. Always provide `:key` on `v-for` — stable IDs, not index.
@@ -14,7 +28,7 @@ Apply when the pull request touches Vue code: `.vue` files, `vue.config.js`, `vi
 10. TypeScript: define prop types with `defineProps<T>()` and emits with `defineEmits<T>()`.
 11. Decompose large components; extract reusable logic into composables.
 12. No hardcoded secrets; API calls go through the project's service layer.
-13. Test: Vitest for unit tests, Cypress/Playwright for E2E.
+13. Test with the project's existing setup (Vitest, Cypress/Playwright where already used).
 14. Follow the Vue style guide (Priority A + B rules).
 
 Severity guide:

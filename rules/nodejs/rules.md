@@ -1,6 +1,19 @@
 # Node.js Review Rules
 
-Apply when the pull request touches Node.js backend code: server files, API routes, scripts, `package.json` with server dependencies (express, fastify, nest, etc.).
+Platform detection signals: `server.*` entry files, express/fastify/nest configs, `package.json` with server dependencies.
+
+This file is the **loading index** for Node.js review rules. The rule loader reads the
+`## Instruction files` section below and inlines every referenced instruction file whose
+`applyTo` scope matches the pull request's changed files. The baseline rules below always load.
+
+## Instruction files
+
+Independent, self-contained instruction packages under `.github/instructions/nodejs/`:
+
+- .github/instructions/nodejs/nodejs.instructions.md — runtime & async: awaited/handled promises, event-loop safety, streams, child processes
+- .github/instructions/nodejs/api-server.instructions.md — HTTP layer: auth, validation, parameterized queries, safe errors, bounded endpoints
+
+## Baseline rules (always loaded)
 
 1. Never trust client input: validate request params, bodies, headers, and query strings with a schema (zod, joi, class-validator, etc.).
 2. Use parameterized queries for databases — never string interpolation into SQL/NoSQL.

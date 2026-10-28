@@ -1,6 +1,20 @@
 # .NET Review Rules
 
-Apply when the pull request touches .NET code: `.cs` files, `.csproj`, `.sln`, `.razor`.
+Platform detection signals: `.csproj`, `.sln`, `.cs`/`.razor` files.
+
+This file is the **loading index** for .NET review rules. The rule loader reads the
+`## Instruction files` section below and inlines every referenced instruction file whose
+`applyTo` scope matches the pull request's changed files. The baseline rules below always load.
+
+## Instruction files
+
+Independent, self-contained instruction packages under `.github/instructions/dotnet/`:
+
+- .github/instructions/dotnet/csharp.instructions.md — C# correctness: async/await, ConfigureAwait, disposal ownership, cancellation, LINQ discipline
+- .github/instructions/dotnet/aspnet.instructions.md — ASP.NET Core & EF Core: authorization, DI lifetimes, N+1, transactions, bounded queries
+- .github/instructions/dotnet/testing.instructions.md — xUnit/NUnit behavior assertions with the project's stack
+
+## Baseline rules (always loaded)
 
 1. Never use string concatenation in SQL — use parameterized queries or EF Core.
 2. No hardcoded secrets — use User Secrets, environment variables, or Azure Key Vault.
@@ -13,7 +27,7 @@ Apply when the pull request touches .NET code: `.cs` files, `.csproj`, `.sln`, `
 9. Follow C# naming: PascalCase public members, `_camelCase` private fields.
 10. Use records for DTOs; primary constructors where idiomatic (C# 12).
 11. Use `IEnumerable` / `IAsyncEnumerable` for lazy sequences.
-12. Test: xUnit + Moq for unit tests, `WebApplicationFactory` for integration.
+12. Test with the project's existing stack (xUnit + Moq and `WebApplicationFactory` where already used); respect its analyzer configuration.
 13. Use `IHttpClientFactory` — not raw `new HttpClient()`.
 14. Respect `.editorconfig` and analyzer rules — no suppressed warnings without justification.
 

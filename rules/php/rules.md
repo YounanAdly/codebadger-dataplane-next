@@ -1,6 +1,20 @@
 # PHP Review Rules
 
-Apply when the pull request touches PHP code: `.php` files, `composer.json`.
+Platform detection signals: `composer.json`, `.php` files.
+
+This file is the **loading index** for PHP review rules. The rule loader reads the
+`## Instruction files` section below and inlines every referenced instruction file whose
+`applyTo` scope matches the pull request's changed files. The baseline rules below always load.
+
+## Instruction files
+
+Independent, self-contained instruction packages under `.github/instructions/php/`:
+
+- .github/instructions/php/php.instructions.md — language correctness: strict comparisons, error handling, untrusted deserialization, coercion traps
+- .github/instructions/php/frameworks.instructions.md — Laravel/Symfony: authorization, mass assignment, ORM N+1, queues, CSRF
+- .github/instructions/php/testing.instructions.md — PHPUnit/Pest behavior assertions with the project's stack
+
+## Baseline rules (always loaded)
 
 1. Never interpolate user input into SQL — use prepared statements (PDO / ORM).
 2. Escape all output for its context (`htmlspecialchars` for HTML); never disable framework escaping.

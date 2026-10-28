@@ -1,0 +1,22 @@
+diff --git a/App/Sources/OrderService.swift b/App/Sources/OrderService.swift
+new file mode 100644
+--- /dev/null
++++ b/App/Sources/OrderService.swift
+@@ -0,0 +1,17 @@
++import Foundation
++
++final class OrderService {
++    var apiKey = "sk-live-51H8xQp2mK9vL3wYzR7sT"
++    private var timer: Timer?
++
++    func startPolling() {
++        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
++            let url = URL(string: "http://api.example.com/orders")!
++            let task = URLSession.shared.dataTask(with: url) { data, _, _ in
++                let orders = try! JSONDecoder().decode([Order].self, from: data!)
++                NotificationCenter.default.post(name: .ordersReloaded, object: orders)
++            }
++            task.resume()
++        }
++    }
++}

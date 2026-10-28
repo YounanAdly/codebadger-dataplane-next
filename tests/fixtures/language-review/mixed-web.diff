@@ -1,0 +1,48 @@
+diff --git a/src/components/CommentList.tsx b/src/components/CommentList.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/CommentList.tsx
+@@ -0,0 +1,19 @@
++import { useEffect, useState } from "react";
++
++export function CommentList({ postId }: { postId: string }) {
++  const [comments, setComments] = useState<any[]>([]);
++
++  useEffect(() => {
++    fetch(`/api/posts/${postId}/comments`)
++      .then((res) => res.json())
++      .then((data) => setComments(data));
++  }, []);
++
++  return (
++    <ul>
++      {comments.map((c) => (
++        <li dangerouslySetInnerHTML={{ __html: c.bodyHtml }} />
++      ))}
++    </ul>
++  );
++}
+diff --git a/server.js b/server.js
+new file mode 100644
+--- /dev/null
++++ b/server.js
+@@ -0,0 +1,19 @@
++const express = require("express");
++const { db } = require("./db");
++
++const router = express.Router();
++
++router.post("/comments", (req, res) => {
++  const { body, postId } = req.body;
++  const token = Math.random().toString(36).slice(2);
++  db.run(`INSERT INTO comments (post_id, body, token) VALUES ('${postId}', '${body}', '${token}')`);
++  db.all(`SELECT * FROM comments WHERE post_id = '${postId}'`, (err, rows) => {
++    if (err) {
++      res.status(500).json({ error: err.stack });
++      return;
++    }
++    res.json(rows);
++  });
++});
++
++module.exports = router;

@@ -13,7 +13,6 @@ export type Platform =
   | "angular"
   | "flutter"
   | "kotlin"
-  | "swift"
   | "react"
   | "nextjs"
   | "react-native"
@@ -27,11 +26,14 @@ export type Platform =
   | "go"
   | "php"
   | "ruby"
+  | "rust"
+  | "sql"
   | "generic";
 
 export const ALL_PLATFORMS: Platform[] = [
-  "angular", "flutter", "kotlin", "swift", "react", "nextjs", "react-native",
-  "vue", "nodejs", "python", "java", "android", "ios", "dotnet", "go", "php", "ruby",
+  "angular", "flutter", "kotlin", "react", "nextjs", "react-native",
+  "vue", "nodejs", "python", "java", "android", "ios", "dotnet", "go", "php",
+  "ruby", "rust", "sql",
 ];
 
 /** Platforms below this confidence are ignored; at 0 we fall back to `generic`. */
@@ -105,7 +107,8 @@ const PLATFORM_SIGNATURES: PlatformPattern[] = [
     patterns: [
       /(^|\/)app\/.+\.(tsx|ts|jsx|js)$/,
       /(^|\/)pages\/.+\.(tsx|ts|jsx|js)$/,
-      /(^|\/)app\/api\//,
+      // Scoped to code extensions: Python backends commonly use app/api/ layouts too.
+      /(^|\/)app\/api\/.+\.(ts|tsx|js|jsx|mjs|mts|cts)$/,
       /(^|\/)next-env\.d\.ts$/,
     ],
   },
@@ -257,6 +260,21 @@ const PLATFORM_SIGNATURES: PlatformPattern[] = [
     weight: 2,
     patterns: [/\.rb$/, /\.erb$/],
   },
+  {
+    platform: "rust",
+    weight: 5,
+    patterns: [/(^|\/)Cargo\.toml$/, /(^|\/)Cargo\.lock$/],
+  },
+  {
+    platform: "rust",
+    weight: 2,
+    patterns: [/\.rs$/],
+  },
+  {
+    platform: "sql",
+    weight: 2,
+    patterns: [/\.sql$/],
+  },
 ];
 
 interface ScoreAccumulator {
@@ -355,7 +373,7 @@ export function platformForFile(file: string, detected: DetectedPlatform[]): Pla
 
 /** Directories and file patterns that are never review signals. */
 const GENERATED_FILE_PATTERN =
-  /(^|\/)(node_modules|\.dart_tool|build|dist|\.gradle|Pods|\.venv|coverage|vendor|\.next|\.angular)\//;
+  /(^|\/)(node_modules|\.dart_tool|build|dist|target|\.gradle|Pods|\.venv|coverage|vendor|\.next|\.angular)\//;
 
 export function isGeneratedFile(filePath: string): boolean {
   if (GENERATED_FILE_PATTERN.test(filePath)) return true;

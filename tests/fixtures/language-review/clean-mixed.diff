@@ -1,0 +1,77 @@
+diff --git a/src/components/CommentList.tsx b/src/components/CommentList.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/CommentList.tsx
+@@ -0,0 +1,30 @@
++import { useEffect, useState } from "react";
++
++type Comment = { id: string; body: string };
++
++export function CommentList({ postId }: { postId: string }) {
++  const [comments, setComments] = useState<Comment[]>([]);
++  const [error, setError] = useState<string | null>(null);
++
++  useEffect(() => {
++    const controller = new AbortController();
++    fetch(`/api/posts/${postId}/comments`, { signal: controller.signal })
++      .then((res) => {
++        if (!res.ok) throw new Error("Request failed");
++        return res.json();
++      })
++      .then((data) => setComments(data))
++      .catch((err) => {
++        if (err.name !== "AbortError") setError("Could not load comments");
++      });
++    return () => controller.abort();
++  }, [postId]);
++
++  if (error) return <p role="alert">{error}</p>;
++  return (
++    <ul>
++      {comments.map((c) => (
++        <li key={c.id}>{c.body}</li>
++      ))}
++    </ul>
++  );
++}
+diff --git a/server.js b/server.js
+new file mode 100644
+--- /dev/null
++++ b/server.js
+@@ -0,0 +1,27 @@
++const express = require("express");
++const crypto = require("crypto");
++const { requireUser } = require("./auth");
++const { db } = require("./db");
++
++const router = express.Router();
++
++router.post("/comments", requireUser, (req, res) => {
++  const { postId, body } = req.body ?? {};
++  if (typeof postId !== "string" || typeof body !== "string") {
++    return res.status(400).json({ error: "postId and body are required" });
++  }
++  const token = crypto.randomUUID();
++  db.run(
++    "INSERT INTO comments (post_id, body, token) VALUES (?, ?, ?)",
++    [postId, body, token],
++    (err) => {
++      if (err) {
++        req.log.error(err);
++        return res.status(500).json({ error: "Could not save comment" });
++      }
++      res.status(201).json({ ok: true, token });
++    }
++  );
++});
++
++module.exports = router;
+diff --git a/db/migrations/004_orders.sql b/db/migrations/004_orders.sql
+new file mode 100644
+--- /dev/null
++++ b/db/migrations/004_orders.sql
+@@ -0,0 +1,4 @@
++ALTER TABLE orders ADD COLUMN discount_code VARCHAR(50) NULL;
++
++-- Additive only: existing rows keep NULL until the backfill in 005.
++CREATE INDEX idx_orders_user ON orders (user_id);

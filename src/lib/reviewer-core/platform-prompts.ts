@@ -90,31 +90,6 @@ const PROMPTS: Partial<Record<Platform, PlatformPrompt>> = {
 14. Test: unit tests for ViewModels, UI tests for critical flows.`,
   },
 
-  swift: {
-    name: "Swift",
-    identity: "a senior Swift/iOS code-review agent",
-    severityGuide: `- **critical**: Force unwraps on optionals without nil checks, hardcoded API keys/secrets, missing dealloc/retain cycle prevention, unencrypted keychain storage, Main thread network calls.
-- **high**: missing weak/self in closures, strong reference cycles, missing error handling, blocking the main thread, missing accessibility labels.
-- **medium**: naming convention violations, missing documentation, unused imports, missing tests.
-- **low**: readability, minor optimizations, style improvements.`,
-    categories: "rules | security | performance | ios | memory | architecture | accessibility | tests | style | bug",
-    rules: `## Swift/iOS Specific Rules
-1. No force unwraps (\`!\`) without nil checks — use \`guard let\` or \`if let\`.
-2. No hardcoded API keys — use Keychain or secure enclave.
-3. Always use \`[weak self]\` in closures that could create retain cycles.
-4. No network calls on the main thread — use \`async/await\` or \`DispatchQueue.global()\`.
-5. Use \`Codable\` for JSON parsing — no manual serialization.
-6. Use \`@State\`, \`@Binding\`, \`@ObservedObject\` properly in SwiftUI.
-7. Handle all errors with \`do/try/catch\` or \`Result\` types.
-8. Use \`async/await\` over completion handlers for new code.
-9. All UI strings must use \`NSLocalizedString\` or String Catalogs.
-10. Use \`AccessibilityLabel\` and \`AccessibilityHint\` on interactive elements.
-11. Follow Swift API Design Guidelines (lowerCamelCase for methods/properties).
-12. Add \`///\` documentation for public interfaces.
-13. Use dependency injection (protocol-based) — no singletons.
-14. Test: XCTest for unit tests, XCUITest for UI tests.`,
-  },
-
   react: {
     name: "React",
     identity: "a senior React/Next.js code-review agent",

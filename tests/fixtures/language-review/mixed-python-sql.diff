@@ -1,0 +1,36 @@
+diff --git a/app/api/orders.py b/app/api/orders.py
+new file mode 100644
+--- /dev/null
++++ b/app/api/orders.py
+@@ -0,0 +1,19 @@
++import pickle
++
++from fastapi import APIRouter, Request
++
++from app.db import connection
++
++router = APIRouter()
++
++
++@router.post("/orders/search")
++async def search_orders(request: Request, user_id: int, status: str = "open"):
++    query = f"SELECT * FROM orders WHERE user_id = {user_id} AND status = '{status}'"
++    rows = connection.execute(query).fetchall()
++    try:
++        prefs = pickle.loads(await request.body())
++        rows = [r for r in rows if r["total"] > prefs["min_total"]]
++    except:
++        rows = []
++    return {"orders": rows, "cursor": rows[-1]["id"] if rows else None}
+diff --git a/db/migrations/004_orders.sql b/db/migrations/004_orders.sql
+new file mode 100644
+--- /dev/null
++++ b/db/migrations/004_orders.sql
+@@ -0,0 +1,7 @@
++ALTER TABLE orders ADD COLUMN discount_code VARCHAR(50);
++DROP TABLE order_drafts;
++CREATE INDEX idx_orders_user ON orders (user_id);
++
++INSERT INTO order_audit (action) VALUES ('orders migration applied');
++
++-- order_drafts data is intentionally discarded

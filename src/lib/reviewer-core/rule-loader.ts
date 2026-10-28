@@ -117,8 +117,9 @@ export function parseReviewConfigYaml(raw: string): RepoReviewConfig {
 }
 
 const ALL_PLATFORM_SET = new Set<string>([
-  "angular", "flutter", "kotlin", "swift", "react", "nextjs", "react-native",
-  "vue", "nodejs", "python", "java", "android", "ios", "dotnet", "go", "php", "ruby",
+  "angular", "flutter", "kotlin", "react", "nextjs", "react-native",
+  "vue", "nodejs", "python", "java", "android", "ios", "dotnet", "go", "php",
+  "ruby", "rust", "sql",
 ]);
 
 /**
@@ -142,7 +143,8 @@ export function loadRepositoryConfig(repoRoot: string): RepoReviewConfig | null 
 // Rule loading
 // ---------------------------------------------------------------------------
 
-const COMMON_RULE_FILES = ["code-quality.md", "security.md", "testing.md", "pull-request.md"];
+/** Common rule files loaded for every review, in order. */
+export const COMMON_RULE_FILES = ["code-quality.md", "security.md", "api-data-integrity.md", "testing.md", "pull-request.md"];
 
 function readRuleFile(path: string): string | null {
   if (!existsSync(path)) return null;
@@ -305,6 +307,9 @@ export function loadRuleBundle(
 
   // 2. Platform rules — baseline rules.md per platform, plus any instruction
   //    files referenced by its index whose applyTo scope matches the diff.
+  //    Swift sources resolve to the "ios" platform: its signature list covers
+  //    .swift files, and the iOS instruction library includes the Swift,
+  //    SwiftUI, and UIKit packages.
   const platformBlocks: string[] = [];
   const detectedPlatforms = detection.platforms.filter((p) => p.name !== "generic");
   for (const p of detectedPlatforms) {
