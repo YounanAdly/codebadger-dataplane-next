@@ -16,6 +16,7 @@ Applies to route registration, screen-to-screen navigation, arguments passing, a
 3. **Typed, validated arguments.** Pass typed objects/settings classes where the project does; validate query/path parameters before use (null or malformed args must degrade to a defined error/redirect route, not crash).
 4. **Consistent transition style** with the project (platform-adaptive page routes vs. custom transitions) — don't introduce one-off transitions.
 5. **Deep links must be testable and state-safe**: navigating directly to a deep route without prior app state must work or redirect gracefully.
+6. **Pop interception uses `PopScope`** (`onPopInvokedWithResult` on current Flutter; `onPopInvoked` on older supported SDKs) — `WillPopScope` is deprecated and removed from newer Flutter; new code using it is a finding, while untouched legacy uses are not.
 
 ## Positive recommendations
 

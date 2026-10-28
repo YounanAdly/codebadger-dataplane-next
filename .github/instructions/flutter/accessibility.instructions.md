@@ -15,7 +15,7 @@ Applies to any user-facing UI change.
 2. **Touch targets meet the design system's minimum**: 48×48 logical pixels for Material apps; 44×44pt for apps following iOS/HIG sizing (e.g. Cupertino components). Shrink-wrapped small buttons need `minimumSize`/padding or `ConstrainedBox` to reach the applicable minimum — apply the one the app's design system actually uses.
 3. **Screen-reader order and grouping**: use `Semantics(container: true)` / `MergeSemantics` for composite cards so a tile reads as one unit instead of scattered labels; use `ExcludeSemantics`/`semanticLabel` on decorative images (`Image.asset(..., semanticLabel: null)` + excluded) so decoration is not announced.
 4. **Images**: meaningful images get `semanticLabel` or wrapping `Semantics`; decorative images get none and are excluded.
-5. **Text scaling**: no fixed heights on text containers that clip at large font scales; test layouts at larger `textScaleFactor` where feasible.
+5. **Text scaling**: no fixed heights on text containers that clip at large font scales; test layouts at larger scale factors (`MediaQuery.textScalerOf` / `TextScaler` on current Flutter) where feasible.
 6. **Contrast**: text on colored surfaces/overlays must maintain readable contrast — flag new color pairs with obvious low contrast.
 7. **Focus traversal**: custom focusable widgets (via `FocusableActionDetector`/`Focus`) integrate with keyboard/switch access; dialogs move focus in and restore on close.
 8. **Form fields** expose labels (`InputDecoration.labelText`) and error text (`errorText`) so screen readers announce them.

@@ -13,7 +13,7 @@ Applies to any change that stores, transmits, logs, or displays sensitive data (
 
 1. **No secrets in source**: API keys, tokens, passwords, signing material in Dart strings ship in the binary and are trivially extractable. Secrets belong in build-time injection (`--dart-define`/env plumbing), backend-proxied calls, or the platform secret stores — never committed source.
 2. **Tokens and PII are not persisted in plaintext storage**: plain `SharedPreferences`/`shared_preferences`/file caches for tokens or sensitive user data is a finding. Use the secure storage mechanism the project already uses (flutter_secure_storage, platform Keychain/Keystore bridges, or an equivalent) — do not mandate a specific package.
-3. **TLS only**: `http://` endpoints or clients configured to accept bad certificates (`badCertificateCallback` returning true without validation) are critical findings.
+3. **TLS only**: `http://` endpoints or clients configured to accept bad certificates (`badCertificateCallback` returning true without validation) are critical findings. Cleartext is also disabled at the manifest level: `android:usesCleartextTraffic="true"` in a shipped manifest (anything outside a `src/debug/` variant manifest) and iOS `NSAppTransportSecurity` exceptions like `NSAllowsArbitraryLoads` are critical findings unless the PR documents why the platform-mandated exception is required — scoped alternatives (`android:networkSecurityConfig`, per-domain ATS exceptions) are the fix.
 4. **No sensitive data in logs**: `debugPrint`/`print`/log interceptors printing tokens, headers, full bodies containing PII, or crypto material are findings.
 
 ## Review rules
@@ -41,6 +41,15 @@ prefs.setString('accessToken', token);
 
 // BAD — TLS disabled
 client.badCertificateCallback = (cert, host, port) => true;
+```
+
+```xml
+<!-- BAD — shipped AndroidManifest disables cleartext protection app-wide -->
+<application android:usesCleartextTraffic="true" ...>
+
+<!-- BAD — Info.plist disables ATS app-wide -->
+<key>NSAppTransportSecurity</key>
+<dict><key>NSAllowsArbitraryLoads</key><true/></dict>
 ```
 
 ## Preserve existing conventions

@@ -18,6 +18,7 @@ Applies to HTTP clients (dio, http, retrofit, graphql, sockets) and any remote d
 5. **Cancellation uses the mechanism the project's networking solution actually provides** — e.g. dio `CancelToken`, rxdart `switchMap`, or whatever cancellation API the project uses. Do not assume a specific library exists, and do not suggest cancellation mechanisms a client does not support.
 6. **Timeouts are set** (or provided by the project's shared client config) — a request without a timeout can hang the UI state forever.
 7. **No secrets in logs**: request/response interceptors must not log headers, tokens, or full bodies containing PII.
+8. **HTTP clients are reused or closed.** A per-call `http.Client()` (or `HttpClient()`) that is never `close()`d leaks sockets; follow the project's client-lifetime pattern (shared singleton, injected client, or scoped `close()`). One-off top-level `http.get`/`http.post` helpers are acceptable where the project already uses them.
 
 ## Positive recommendations
 

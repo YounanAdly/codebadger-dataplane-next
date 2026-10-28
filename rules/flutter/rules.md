@@ -6,7 +6,8 @@ This file is the **loading index** for Flutter review rules. The rule loader rea
 `## Instruction files` section below and inlines every referenced instruction file whose
 `applyTo` scope matches the pull request's changed files — so a `lib/`-only PR loads the
 widget/state/api rules but skips testing or dependency rules until relevant files change.
-The baseline rules at the bottom of this file always load.
+The baseline rules at the bottom always load, including for PRs (pubspec-only, manifest-only,
+metadata) whose files fall outside every instruction-file scope.
 
 ## Instruction files
 
@@ -31,32 +32,26 @@ Independent, self-contained instruction packages under `.github/instructions/flu
 
 ## Baseline rules (always loaded)
 
-## Language & analyzer
-- Follow the project's configured Dart analyzer rules and `dart format` expectations.
-- Follow Effective Dart naming conventions (lowerCamelCase members, PascalCase types).
-- Check null-safety correctness: no unsafe `!` force unwraps without a preceding null check; prefer `?.`, `??`, and pattern matching.
-- No `dynamic` types — use proper type annotations.
+These are the always-on safety net for Flutter pull requests. Where an indexed instruction
+file covers the same concern, its detailed version — including its documented exceptions —
+takes precedence over the one-line summary here; never report a baseline line as a blocking
+defect when the matching instruction file carves out a legitimate exception.
 
-## Widgets & performance
-- Prefer `const` constructors and widgets when values are compile-time constants.
-- Avoid expensive work inside `build()`; never call `setState()` inside `build()` or `initState()`.
-- Use `ListView.builder` for long lists — never materialize all children at once.
-- Use `Keys` on items in `ListView`, `Column`, etc. for proper widget identity.
-- Decompose the widget tree into small, focused widgets.
-- Prefer targeted rebuilds (`Consumer`/`Selector`, Riverpod/Bloc) over full-widget `setState`; follow the project's existing state-management pattern.
+### Correctness
+- Preserve null safety: no `!` force-unwraps, bare `late`, or unchecked casts without local proof the value is present — follow `dart.instructions.md` for the full contract and exceptions.
+- Every `Future`/`Stream` error path is handled: no empty catches, no silently dropped futures, no raw exception text shown to users.
+- Every screen that loads data handles loading, error, empty, and success states with the project's existing patterns.
+- Async continuations that touch `setState`, `context`, or widget state after an `await` are guarded with `mounted` / `context.mounted` when the widget may be gone.
 
-## Resources & async
-- Dispose controllers, focus nodes, animation controllers, and stream subscriptions in `dispose()`.
-- Handle all `Future`/`Stream` errors with `try/catch` or `.catchError()`; check null safety on async results.
-- Handle loading, error, empty, and success states in every screen.
+### Lifecycle
+- Resources created in a `StatefulWidget` are released in `dispose()`: controllers, focus nodes, animation controllers, timers, stream subscriptions, and listeners (see the widgets and async instruction files for Riverpod/`ref.onDispose` equivalents).
 
-## App quality
-- Business logic must not live directly inside widgets — separate it from UI.
-- No `print()`/`debugPrint()` in production code.
-- All user-visible strings must use `intl`/localization — no hardcoded text.
-- Review accessibility semantics, labels, text scaling, and touch-target sizes.
-- Check responsive behavior across screen sizes and orientations; keep navigation consistent with the app's router.
-- Do not expose API keys, tokens, or credentials in Dart source; use secure storage for sensitive data.
-- Review Android/iOS platform-channel integration for lifecycle correctness on both platforms.
-- Add or update unit, widget, or integration tests for changed behavior.
-- Flag unnecessary new dependencies.
+### Security — mirrors `common/security.md`, which always wins
+- No secrets, API keys, tokens, or credentials in Dart source, assets, or manifests; sensitive data uses the project's secure storage and secret-injection mechanism.
+- TLS only: no cleartext endpoints, no disabled certificate validation, and no sensitive data (tokens, PII) in logs or error reports.
+- Client-side checks are UX, not authorization: flag only what the client genuinely owns.
+
+### Quality
+- Follow the project's analyzer config, state-management solution, architecture, navigation, localization, and theming conventions — review consistency with them; never mandate a different one.
+- Behavior changes ship with tests at the level the project already uses.
+- Report real defects with evidence in the diff, a concrete fix, and a severity proportional to impact; do not flag stylistic preferences, and do not repeat one underlying issue as multiple findings.

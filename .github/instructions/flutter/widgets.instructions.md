@@ -12,9 +12,11 @@ Applies to widget classes, `build()` methods, and widget composition.
 ## Hard rules
 
 1. **Dispose everything created.** `TextEditingController`, `ScrollController`, `AnimationController`, `FocusNode`, `PageController`, `StreamSubscription`, `Timer` — dispose/close/cancel in `dispose()` (or `ref.onDispose` / `autoDispose` in Riverpod).
-2. **No `setState()` after `dispose()`** — guard async callbacks with `mounted` (or `context.mounted`) before calling `setState`/using context.
-3. **No `setState()` inside `build()` or `initState()`** (directly or synchronously chained).
-4. **`const` constructors where possible.** A widget tree (or subtree) constructible at compile time should be `const` — this is the single cheapest rebuild optimization.
+2. **Listeners are removed symmetrically.** Every `addListener` on a `ChangeNotifier`/`Listenable` (e.g. `scrollController.addListener(...)`) has a matching `removeListener` in `dispose()`; a `WidgetsBindingObserver` registered in `initState` is removed in `dispose()` too.
+3. **No `setState()` after `dispose()`** — guard async callbacks with `mounted` (or `context.mounted`) before calling `setState`/using context.
+4. **No `setState()` inside `build()` or `initState()`** (directly or synchronously chained).
+5. **Inherited-widget lookups do not happen in `initState`.** `Theme.of(context)`, `MediaQuery.of(context)`, `Provider.of`, and similar `dependOnInheritedWidget` calls belong in `build()` or `didChangeDependencies()` — calling them in `initState` throws and breaks dependency tracking.
+6. **`const` constructors where possible.** A widget tree (or subtree) constructible at compile time should be `const` — this is the single cheapest rebuild optimization.
 
 ## Review rules
 
@@ -40,6 +42,15 @@ final controller = TextEditingController();
 
 // BAD — async gap then setState
 http.get(...).then((r) => setState(() => data = r)); // no mounted check
+
+// BAD — listener never removed
+initState() { scrollController.addListener(onScroll); } // no removeListener in dispose
+
+// BAD — observer never removed
+initState() { WidgetsBinding.instance.addObserver(this); } // no removeObserver in dispose
+
+// BAD — inherited lookup in initState
+initState() { final color = Theme.of(context).colorScheme; } // throws; use didChangeDependencies
 
 // BAD — index keys on a reorderable list
 items.map((e) => Tile(key: Key('$index')))

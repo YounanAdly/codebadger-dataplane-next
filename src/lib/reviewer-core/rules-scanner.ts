@@ -195,6 +195,45 @@ const RULES = [
         "New code must use `inject(Foo)` — never constructor parameter injection.",
     }),
   },
+
+  // ── Flutter / Dart deterministic checks ───────────────────────────────
+  // Mirrors .github/instructions/flutter/security.instructions.md ("TLS only").
+  {
+    id: "dart-tls-bypass",
+    filePattern: /\.dart$/i,
+    match: (line, filePath) => {
+      if (/(_test\.dart$)|(^|\/)test\//i.test(filePath)) return null;
+      if (!/badCertificateCallback\s*[:=]/.test(line)) return null;
+      return /=>\s*true\b|\{\s*return\s+true\s*;?\s*\}/.test(line)
+        ? { hit: "badCertificateCallback returning true" }
+        : null;
+    },
+    build: () => ({
+      title: "TLS certificate validation disabled (`badCertificateCallback` returns true)",
+      category: "security",
+      ruleRef: ".github/instructions/flutter/security.instructions.md — TLS only",
+      explanation:
+        "Accepting every server certificate disables TLS verification and enables man-in-the-middle attacks on every request from this client. Validate the certificate (or pin) instead; if the intent is a debug/test exception, gate it to debug builds and never ship it in release code.",
+    }),
+  },
+  {
+    id: "android-cleartext-traffic",
+    filePattern: /AndroidManifest\.xml$/i,
+    match: (line, filePath) => {
+      // Debug-variant manifests routinely enable cleartext for local dev.
+      if (/\/(debug|androidTest)\//i.test(filePath)) return null;
+      return /android:usesCleartextTraffic\s*=\s*"true"/i.test(line)
+        ? { hit: 'android:usesCleartextTraffic="true"' }
+        : null;
+    },
+    build: () => ({
+      title: "`android:usesCleartextTraffic=\"true\"` disables cleartext protection app-wide",
+      category: "security",
+      ruleRef: ".github/instructions/flutter/security.instructions.md — TLS only",
+      explanation:
+        "Shipped manifests must keep cleartext traffic disabled. Allow only the specific http:// domains that are genuinely required via `android:networkSecurityConfig`, and document why the exception is needed. Debug-variant manifests (`src/debug/`) are exempt.",
+    }),
+  },
 ];
 
 // ── PR Scope Validation ───────────────────────────────────────────────

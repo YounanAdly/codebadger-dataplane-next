@@ -7,16 +7,16 @@
  * rules → load trusted repository configuration → build the review prompt →
  * call the AI → validate and normalize findings → return for publishing.
  */
-import { COMPANY_NAME, LOGO_URL, BOT_NAME } from "@/lib/branding";
-import { scanDiff, parseUnifiedDiffFiles } from "./rules-scanner";
-import { detectPlatforms, extractFilePaths, isGeneratedFile, type Platform, type DetectedPlatform } from "./platform-detector";
-import { loadRuleBundle, loadRepositoryConfig, formatPlatforms, type RuleBundle } from "./rule-loader";
-import { buildReviewPrompt } from "./prompt-builder";
-import { normalizeFindings } from "./findings";
-import type { ProjectRuleFile } from "./project-rules";
-import { withGeminiModel } from "./gemini-model";
-import { fetchWithRetries } from "./provider-request";
-import { allProvidersFailed } from "./provider-errors";
+import { COMPANY_NAME, LOGO_URL, BOT_NAME } from "../branding.ts";
+import { scanDiff, parseUnifiedDiffFiles } from "./rules-scanner.ts";
+import { detectPlatforms, extractFilePaths, isGeneratedFile, type Platform, type DetectedPlatform } from "./platform-detector.ts";
+import { loadRuleBundle, loadRepositoryConfig, formatPlatforms, type RuleBundle } from "./rule-loader.ts";
+import { buildReviewPrompt } from "./prompt-builder.ts";
+import { normalizeFindings } from "./findings.ts";
+import type { ProjectRuleFile } from "./project-rules.ts";
+import { withGeminiModel } from "./gemini-model.ts";
+import { fetchWithRetries } from "./provider-request.ts";
+import { allProvidersFailed } from "./provider-errors.ts";
 
 // ── AI provider chain ────────────────────────────────────────────────────────
 // Reviews try the primary provider (AI_PROVIDER, default gemini) first; if its

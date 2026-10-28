@@ -1,0 +1,92 @@
+diff --git a/lib/api_client.dart b/lib/api_client.dart
+new file mode 100644
+--- /dev/null
++++ b/lib/api_client.dart
+@@ -0,0 +1,15 @@
++import 'dart:convert';
++import 'dart:io';
++
++class ApiClient {
++  static const apiKey = 'AIzaSyA1bC2dE3fG4hI5jK6lM7nO8pQ9rS0tU4v';
++
++  Future<Map<String, dynamic>> fetchProfile(String token) async {
++    final client = HttpClient();
++    client.badCertificateCallback = (cert, host, port) => true;
++    final request = await client.getUrl(Uri.parse('http://api.example.com/profile'));
++    final response = await request.close();
++    final body = await response.transform(utf8.decoder).join();
++    return jsonDecode(body) as Map<String, dynamic>;
++  }
++}
+diff --git a/lib/profile_screen.dart b/lib/profile_screen.dart
+new file mode 100644
+--- /dev/null
++++ b/lib/profile_screen.dart
+@@ -0,0 +1,43 @@
++import 'dart:async';
++
++import 'package:flutter/material.dart';
++import 'package:shared_preferences/shared_preferences.dart';
++
++import 'api_client.dart';
++
++class ProfileScreen extends StatefulWidget {
++  const ProfileScreen({super.key});
++
++  @override
++  State<ProfileScreen> createState() => _ProfileScreenState();
++}
++
++class _ProfileScreenState extends State<ProfileScreen> {
++  final _nameController = TextEditingController();
++  StreamSubscription<int>? _ticker;
++
++  @override
++  void initState() {
++    super.initState();
++    final accent = Theme.of(context).colorScheme.primary;
++    _ticker = Stream<int>.periodic(const Duration(seconds: 1)).listen((_) {});
++    _loadProfile();
++  }
++
++  Future<void> _loadProfile() async {
++    final prefs = await SharedPreferences.getInstance();
++    await prefs.setString('accessToken', 'user-session-token-123');
++    try {
++      final profile = await ApiClient().fetchProfile('token');
++      setState(() => _nameController.text = profile['name'] as String);
++    } catch (_) {}
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      appBar: AppBar(title: const Text('Profile')),
++      body: Center(child: TextField(controller: _nameController)),
++    );
++  }
++}
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -1,7 +1,8 @@
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+     <application
+         android:label="profile_app"
+-        android:name="${applicationName}">
++        android:name="${applicationName}"
++        android:usesCleartextTraffic="true">
+         <activity
+             android:name=".MainActivity"
+             android:exported="true">
+diff --git a/pubspec.yaml b/pubspec.yaml
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -18,6 +18,7 @@
+   flutter:
+     sdk: flutter
+   cupertino_icons: ^1.0.8
++  shared_preferences: ^2.3.2
+ 
+ dev_dependencies:
+   flutter_test:
