@@ -108,7 +108,7 @@ function buildTrendWeeks(rows: PrAnalytics[], weeksBack = 8): TrendWeek[] {
 }
 
 const analyticsCard =
-  "relative overflow-hidden rounded-xl border border-line-subtle bg-surface p-5 transition-colors duration-300 hover:border-line-strong";
+  "relative h-full overflow-hidden rounded-xl border border-line-subtle bg-surface p-5 transition-colors duration-300 hover:border-line-strong";
 
 function AccentLine() {
   return (

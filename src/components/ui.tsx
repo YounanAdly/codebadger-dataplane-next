@@ -191,7 +191,7 @@ export function StatCard({ label, value, tone = "default", hint }: {
     warning: "from-warning/70 via-warning/25",
   }[tone];
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-line-subtle bg-surface px-5 py-4 transition-colors duration-200 hover:border-line-strong">
+    <div className="group relative h-full overflow-hidden rounded-xl border border-line-subtle bg-surface px-5 py-4 transition-colors duration-200 hover:border-line-strong">
       {accentCls ? (
         <span
           aria-hidden
