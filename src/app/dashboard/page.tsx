@@ -108,7 +108,7 @@ function buildTrendWeeks(rows: PrAnalytics[], weeksBack = 8): TrendWeek[] {
 }
 
 const analyticsCard =
-  "relative h-full overflow-hidden rounded-xl border border-line-subtle bg-surface p-5 transition-colors duration-300 hover:border-line-strong";
+  "relative flex h-full flex-col overflow-hidden rounded-xl border border-line-subtle bg-surface p-5 transition-colors duration-300 hover:border-line-strong";
 
 function AccentLine() {
   return (
@@ -154,11 +154,15 @@ function AnalyticsCards({ rows }: { rows: PrAnalytics[] }) {
             {reviewed.length === 1 ? "pull request" : "pull requests"}.
           </p>
           {totalFindings > 0 ? (
-            <SeverityDonut slices={slices} total={totalFindings} />
+            <div className="flex flex-1 items-center">
+              <SeverityDonut slices={slices} total={totalFindings} />
+            </div>
           ) : (
-            <p className="mt-6 text-sm text-fg-3">
-              No findings recorded — every reviewed pull request came back clean.
-            </p>
+            <div className="flex flex-1 items-center">
+              <p className="text-sm text-fg-3">
+                No findings recorded — every reviewed pull request came back clean.
+              </p>
+            </div>
           )}
         </section>
       </ChartReveal>

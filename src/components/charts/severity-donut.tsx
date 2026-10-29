@@ -39,7 +39,7 @@ export function SeverityDonut({ slices, total }: { slices: SeveritySlice[]; tota
 
   return (
     <div className="mt-4 grid items-center gap-6 sm:grid-cols-[auto_1fr]">
-      <div className="relative mx-auto h-44 w-44 sm:mx-0">
+      <div className="relative mx-auto h-52 w-52 sm:mx-0">
         <div aria-hidden className="absolute inset-3 rounded-full bg-accent/[0.06] blur-2xl" />
         <svg
           viewBox="0 0 42 42"
@@ -89,11 +89,11 @@ export function SeverityDonut({ slices, total }: { slices: SeveritySlice[]; tota
         </div>
       </div>
 
-      <ul className="space-y-1">
+      <ul className="space-y-1.5">
         {nonZero.map((slice, i) => (
           <li
             key={slice.severity}
-            className={`group/row -mx-2 flex cursor-default items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-raised ${
+            className={`group/row -mx-2 flex cursor-default items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-raised ${
               hovered && hovered !== slice.severity ? "opacity-45" : "opacity-100"
             }`}
             style={{ ["--d" as string]: `${460 + i * 80}ms` }}

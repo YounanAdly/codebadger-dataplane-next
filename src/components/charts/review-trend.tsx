@@ -10,9 +10,9 @@ export interface TrendWeek {
 }
 
 const W = 640;
-const H = 200;
+const H = 240;
 const PAD_X = 10;
-const PAD_TOP = 18;
+const PAD_TOP = 20;
 const PAD_BOTTOM = 26;
 const COL_GAP = 14;
 
@@ -39,11 +39,11 @@ export function ReviewTrend({ weeks }: { weeks: TrendWeek[] }) {
   const last = weeks[n - 1];
 
   return (
-    <figure className="mt-4">
-      <div className="relative">
+    <figure className="mt-4 flex flex-1 flex-col">
+      <div className="relative flex-1">
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full"
+          className="h-full w-full"
           role="img"
           aria-label={`Reviews per week: ${totalReviewed} pull requests reviewed over the last ${n} weeks, ${totalChanges} asked for changes.`}
         >
