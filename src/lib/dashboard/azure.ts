@@ -6,7 +6,7 @@
 // resolved through the Control Plane credentials endpoint.
 
 import { getAzureDevOpsToken } from "@/lib/control-plane";
-import { FINGERPRINT_REGEX, isSummaryComment } from "@/lib/branding";
+import { FINGERPRINT_REGEX, isSummaryComment, severityCountsFromBody } from "@/lib/branding";
 
 const API_VERSION = "7.1-preview.1";
 
@@ -77,6 +77,8 @@ export interface AzurePrRow {
   createdByBot: boolean;
   verdict: string; // success | failure | comment | pending
   findings: number;
+  /** Per-severity totals parsed from the bot summary badge. */
+  severityCounts: Record<string, number>;
   reviewDate: string;
 }
 
@@ -116,6 +118,7 @@ export async function listAzurePullRequests(
     let count = 0;
     let reviewDate = "";
     let createdByBot = false;
+    let severityCounts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
     try {
       const threads = await ado(ctx, `/pullrequests/${pr.pullRequestId}/threads`);
       for (const t of threads.value || []) {
@@ -126,6 +129,7 @@ export async function listAzurePullRequests(
           createdByBot = true;
           verdict = verdictFromBody(text);
           count = findingsCount(text);
+          severityCounts = severityCountsFromBody(text);
           reviewDate = first.publishedDate || "";
           break;
         }
@@ -145,6 +149,7 @@ export async function listAzurePullRequests(
       createdByBot,
       verdict,
       findings: count,
+      severityCounts,
       reviewDate,
     });
   }

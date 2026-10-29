@@ -15,6 +15,7 @@ import {
   AppShell, VerdictBadge, SeverityBadge, EmptyState, SEVERITY_CFG,
   IconArrowLeft, IconExternal, type Severity,
 } from "@/components/ui";
+import { CountUp } from "@/components/charts/count-up";
 import { AccessDeniedView } from "@/components/access-denied";
 
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || "";
@@ -196,7 +197,7 @@ export default async function PRDetailPage({
               return (
                 <div key={sev} className="flex items-center gap-2">
                   <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
-                  <span className="text-lg font-semibold tabular-nums text-fg">{counts[sev]}</span>
+                  <span className="text-lg font-semibold tabular-nums text-fg"><CountUp value={counts[sev]} delay={300} /></span>
                   <span className="text-xs text-fg-3">{cfg.label}</span>
                 </div>
               );

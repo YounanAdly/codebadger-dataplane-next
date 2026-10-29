@@ -5,6 +5,7 @@
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { CountUp } from "@/components/charts/count-up";
 
 /* ------------------------------------------------------------------ */
 /* Icons — single coherent 16px stroke system, currentColor            */
@@ -183,11 +184,25 @@ export function StatCard({ label, value, tone = "default", hint }: {
     failure: "text-accent",
     warning: "text-warning",
   }[tone];
+  const accentCls = {
+    default: "",
+    success: "from-success/70 via-success/25",
+    failure: "from-accent/70 via-accent/25",
+    warning: "from-warning/70 via-warning/25",
+  }[tone];
   return (
-    <div className="cb-fade-up group relative overflow-hidden rounded-xl border border-line-subtle bg-surface px-5 py-4 transition-colors duration-200 hover:border-line-strong">
-      <div className={`absolute inset-x-0 top-0 h-px ${tone === "failure" ? "bg-accent/40" : tone === "success" ? "bg-success/40" : tone === "warning" ? "bg-warning/40" : "bg-transparent"}`} />
+    <div className="group relative overflow-hidden rounded-xl border border-line-subtle bg-surface px-5 py-4 transition-colors duration-200 hover:border-line-strong">
+      {accentCls ? (
+        <span
+          aria-hidden
+          className={`cv-accent absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r to-transparent ${accentCls}`}
+          style={{ ["--d" as string]: "120ms" }}
+        />
+      ) : null}
       <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-3">{label}</div>
-      <div className={`mt-1.5 text-3xl font-semibold tracking-tight tabular-nums ${valueCls}`}>{value}</div>
+      <div className={`mt-1.5 text-3xl font-semibold tracking-tight tabular-nums ${valueCls}`}>
+        {typeof value === "number" ? <CountUp value={value} delay={200} /> : value}
+      </div>
       {hint ? <div className="mt-1 text-xs text-fg-3">{hint}</div> : null}
     </div>
   );

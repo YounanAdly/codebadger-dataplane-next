@@ -14,6 +14,7 @@ import {
   AppShell, VerdictBadge, SeverityBadge, EmptyState, SEVERITY_CFG,
   IconArrowLeft, IconExternal, type Severity,
 } from "@/components/ui";
+import { CountUp } from "@/components/charts/count-up";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -140,7 +141,7 @@ export default async function AzurePrDetail({
               return (
                 <div key={sev} className="flex items-center gap-2">
                   <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
-                  <span className="text-lg font-semibold tabular-nums text-fg">{counts[sev]}</span>
+                  <span className="text-lg font-semibold tabular-nums text-fg"><CountUp value={counts[sev]} delay={300} /></span>
                   <span className="text-xs text-fg-3">{cfg.label}</span>
                 </div>
               );

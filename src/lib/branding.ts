@@ -44,6 +44,27 @@ export function formatLogoBadge(size: number = 28): string {
 }
 
 /**
+ * Per-severity counts from a review summary body. The summary badge posts
+ * lines like "🛑 2 critical · ⚠️ 1 high" (see review-runner), so the emoji +
+ * word pairs are a stable parsing contract.
+ */
+export function severityCountsFromBody(body: string): Record<string, number> {
+  const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  if (!body) return counts;
+  for (const [sev, emoji] of [
+    ["critical", "🛑"],
+    ["high", "⚠️"],
+    ["medium", "🟡"],
+    ["low", "🔵"],
+    ["info", "ℹ️"],
+  ] as const) {
+    const m = body.match(new RegExp(`${emoji}\\s+(\\d+)\\s+${sev}`));
+    if (m) counts[sev] = parseInt(m[1], 10) || 0;
+  }
+  return counts;
+}
+
+/**
  * Validates whether a suggestion is a genuine in-place code replacement.
  * Prevents prose instructions, markdown explanations, or cross-file requests
  * from being inserted into clickable ```suggestion blocks which break files.
